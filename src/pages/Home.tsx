@@ -1,102 +1,72 @@
 import { Link } from 'react-router-dom'
 import { fmtDate, rupees, useSettings } from '../lib/utils'
 
-const FAQ = [
-  ['Who can participate?', 'Students, researchers, academics and independent research authors. Entries are individual.'],
-  ['What is the registration fee?', 'A one-time fee, payable online by UPI, card or net banking through Razorpay. See the refund policy before paying.'],
-  ['Can I use AI tools or copy text?', 'Work must be your own original research. Submissions are checked for similarity and AI-generated content; flagged work is reviewed by humans — nothing is rejected automatically.'],
-  ['Can I edit after submitting?', 'No. A submitted paper is locked. Contact the organizers if a correction is essential.'],
+const awards = [
+  { place: 'First Prize', amount: '₹15,000', rank: '01', tone: 'first' },
+  { place: 'Second Prize', amount: '₹10,000', rank: '02', tone: 'second' },
+  { place: 'Third Prize', amount: '₹5,000', rank: '03', tone: 'third' },
 ]
 
 export default function Home() {
   const s = useSettings()
   return (
-    <div>
-      <section className="bg-gradient-to-br from-royal-900 via-royal-800 to-royal-700 px-4 py-20 text-center text-white">
-        <p className="text-sm uppercase tracking-[0.3em] text-gold-300">A virtual research competition</p>
-        <h1 className="mx-auto mt-3 max-w-3xl font-serif text-4xl font-bold sm:text-6xl">Research Distinction Awards</h1>
-        <p className="mx-auto mt-4 max-w-2xl text-white/80">
-          Celebrating original research in Scientific and Vedic studies. Write, submit and be evaluated by
-          expert judges — entirely online.
-        </p>
-        <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <Link to="/register" className="btn-gold">Register now{s ? ` · ${rupees(s.fee_paise)}` : ''}</Link>
-          <Link to="/login" className="btn-outline !border-white/60 !text-white hover:!bg-white/10">Log in</Link>
+    <div className="home-page">
+      <section className="hero-shell">
+        <div className="hero-copy">
+          <div className="brand-lockup"><img className="hero-logo" src="/favicon/android-chrome-192x192.png" alt="Upstairs Techno" /><span>GI <i>×</i> Knowlegram</span></div>
+          <p className="eyebrow">A celebration of knowledge & discovery</p>
+          <h1>Research<br /><em>Distinction</em><br />Awards</h1>
+          <p className="hero-tagline">Recognizing Research.<br />Rewarding Excellence.</p>
+          <p className="hero-description">An invitation to scholars and curious minds to share original work across scientific and Vedic traditions.</p>
+          <div className="hero-actions">
+            <Link to="/register" className="btn-gold">Register now <span aria-hidden="true">↗</span></Link>
+            <a href="#awards" className="hero-secondary">Explore the awards <span aria-hidden="true">↓</span></a>
+          </div>
+          <div className="hero-categories"><span>Scientific Research</span><b>✦</b><span>Vedic Research</span></div>
         </div>
-        {s?.submission_deadline && (
-          <p className="mt-6 text-sm text-gold-300">Submission deadline: {fmtDate(s.submission_deadline)}</p>
-        )}
+        <div className="hero-art" aria-label="Research Distinction Awards emblem">
+          <div className="orbit orbit-one"/><div className="orbit orbit-two"/>
+          <div className="art-center"><span>ज्ञानम्</span><i>✦</i><strong>RDA</strong><small>2025 · RESEARCH · EXCELLENCE</small></div>
+          <div className="art-caption">THE PURSUIT<br/>OF KNOWLEDGE</div>
+        </div>
+        <div className="hero-index">01 <span>—</span> RESEARCH · RECOGNITION · IMPACT</div>
       </section>
 
-      <div className="mx-auto max-w-6xl space-y-14 px-4 py-14">
-        <section>
-          <h2 className="font-serif text-3xl font-bold text-royal-800">About the competition</h2>
-          <p className="mt-3 max-w-3xl text-slate-600">
-            The Research Distinction Awards is organized by GI &amp; Knowlegram in partnership with a
-            collaborating organization to promote original research, transparent evaluation and academic excellence.
-          </p>
-        </section>
+      <section className="intro-section section-wrap">
+        <div className="section-kicker">A DISTINCTION THAT MATTERS <span>✦</span></div>
+        <div className="intro-grid"><h2>Where enduring wisdom<br/>meets <em>new discovery.</em></h2>
+          <div><p>The Research Distinction Awards celebrate thoughtful, original research and the people who move knowledge forward. We bring together modern scientific inquiry and the depth of India’s Vedic knowledge systems in one academic platform.</p><p>Organized by <b>GI &amp; Knowlegram</b> with our collaborating organization, the awards give researchers a stage to share their work and be recognized for its contribution.</p></div>
+        </div>
+      </section>
 
-        <section className="grid gap-5 sm:grid-cols-2">
-          <div className="card border-t-4 border-t-gold-500">
-            <h3 className="font-serif text-xl font-bold text-royal-800">Scientific Research</h3>
-            <p className="mt-2 text-sm text-slate-600">Original investigations across the sciences, engineering, medicine, social sciences and technology.</p>
+      <section className="category-section">
+        <div className="section-wrap"><div className="section-kicker">TWO PATHS OF INQUIRY <span>02</span></div>
+          <div className="category-grid">
+            <article className="category-card science"><div className="category-symbol">⌬</div><p className="eyebrow">01 / THE MODERN FRONTIER</p><h2>Scientific<br/><em>Research</em></h2><p>Ideas that advance understanding and shape what comes next. Explore science, technology, innovation and interdisciplinary research.</p><span className="card-rule"/></article>
+            <article className="category-card vedic"><div className="category-symbol">ॐ</div><p className="eyebrow">02 / ANCIENT KNOWLEDGE</p><h2>Vedic<br/><em>Research</em></h2><p>Inquiry into Indian knowledge systems, philosophy and consciousness—and the connections between ancient wisdom and modern insight.</p><span className="card-rule"/></article>
           </div>
-          <div className="card border-t-4 border-t-gold-500">
-            <h3 className="font-serif text-xl font-bold text-royal-800">Vedic Research</h3>
-            <p className="mt-2 text-sm text-slate-600">Scholarly work on Vedic knowledge systems, texts, philosophy, sciences and their contemporary relevance.</p>
-          </div>
-        </section>
+        </div>
+      </section>
 
-        <section>
-          <h2 className="font-serif text-3xl font-bold text-royal-800">Awards</h2>
-          <div className="mt-5 grid gap-4 sm:grid-cols-3">
-            {[['First Prize', '₹15,000'], ['Second Prize', '₹10,000'], ['Third Prize', '₹5,000']].map(([t, a]) => (
-              <div key={t} className="card text-center">
-                <p className="text-sm font-semibold uppercase tracking-wider text-gold-600">{t}</p>
-                <p className="mt-2 font-serif text-3xl font-bold text-royal-800">{a}</p>
-              </div>
-            ))}
-          </div>
-          <p className="mt-3 text-sm text-slate-500">All participants whose papers are submitted receive a digital certificate with a verifiable ID.</p>
-        </section>
+      <section className="awards-section section-wrap" id="awards">
+        <div className="awards-heading"><div><div className="section-kicker">MERIT RECOGNIZED <span>03</span></div><h2>Excellence,<br/><em>rewarded.</em></h2></div><p>Outstanding work deserves a distinction. Three awards recognize the research that rises to the occasion.</p></div>
+        <div className="podium-grid">{awards.map((a) => <article className={`prize-card ${a.tone}`} key={a.place}><span className="prize-rank">{a.rank}</span><div className="laurel">✦</div><p>{a.place}</p><h3>{a.amount}</h3><span className="prize-label">RESEARCH DISTINCTION</span></article>)}</div>
+        <p className="award-note">All participants who submit a paper receive a digital certificate with a verifiable ID.</p>
+      </section>
 
-        <section className="grid gap-8 md:grid-cols-2">
-          <div>
-            <h2 className="font-serif text-3xl font-bold text-royal-800">Guidelines &amp; eligibility</h2>
-            <ul className="mt-3 list-disc space-y-1 pl-5 text-slate-600">
-              <li>Individual participation; one paper per participant.</li>
-              <li>Work must be original and properly referenced.</li>
-              <li>Write directly in the portal; drafts autosave and keep version history.</li>
-              <li>Writing activity (paste events, time spent) is recorded to help judges — it is never treated as proof of plagiarism.</li>
-              <li>Similarity and AI-content reports are advisory and reviewed by humans.</li>
-              <li>Submitted papers are locked.</li>
-            </ul>
-          </div>
-          <div>
-            <h2 className="font-serif text-3xl font-bold text-royal-800">Fee &amp; policy</h2>
-            <p className="mt-3 text-slate-600">Registration fee: <b>{s ? rupees(s.fee_paise) : '₹499'}</b> per participant.</p>
-            <p className="mt-2 text-sm text-slate-500">{s?.refund_policy}</p>
-          </div>
-        </section>
+      <section className="details-band"><div className="section-wrap details-layout"><div><div className="section-kicker">PLAN YOUR PARTICIPATION <span>04</span></div><h2>The details,<br/><em>beautifully clear.</em></h2><p>Everything you need to take the next step in your research journey.</p><Link to="/register" className="btn-gold">Begin registration <span>↗</span></Link></div>
+        <div className="detail-list">
+          <div><span>FORMAT</span><b>Virtual competition</b></div>
+          <div><span>REGISTRATION</span><b>{s ? rupees(s.fee_paise) : '₹499'} <small>one-time fee</small></b></div>
+          <div><span>ELIGIBILITY</span><b>Students, researchers, academics &amp; independent authors</b></div>
+          <div><span>SUBMISSION</span><b>Original, referenced research · written in the portal</b></div>
+          <div><span>DEADLINE</span><b>{s?.submission_deadline ? fmtDate(s.submission_deadline) : 'More updates soon'}</b></div>
+          <div><span>EVALUATION</span><b>Expert judging · transparent evaluation</b></div>
+          <div><span>AWARD CEREMONY</span><b>To be announced</b></div>
+        </div></div>
+      </section>
 
-        <section>
-          <h2 className="font-serif text-3xl font-bold text-royal-800">FAQs</h2>
-          <div className="mt-4 space-y-3">
-            {FAQ.map(([q, a]) => (
-              <details key={q} className="card">
-                <summary className="cursor-pointer font-semibold text-royal-800">{q}</summary>
-                <p className="mt-2 text-sm text-slate-600">{a}</p>
-              </details>
-            ))}
-          </div>
-        </section>
-
-        <section className="card bg-royal-50">
-          <h2 className="font-serif text-2xl font-bold text-royal-800">Contact</h2>
-          <p className="mt-2 text-sm text-slate-600">Add your organizing team's email and phone here (src/pages/Home.tsx).</p>
-        </section>
-      </div>
+      <section className="closing-cta"><span>YOUR RESEARCH HAS A PLACE HERE</span><h2>Bring your ideas<br/><em>into distinction.</em></h2><Link to="/register" className="btn-gold">Register now <span>↗</span></Link></section>
     </div>
   )
 }

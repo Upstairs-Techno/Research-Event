@@ -8,6 +8,7 @@ import TableHeader from '@tiptap/extension-table-header'
 import TableCell from '@tiptap/extension-table-cell'
 import Subscript from '@tiptap/extension-subscript'
 import Superscript from '@tiptap/extension-superscript'
+import { PaperLink, TextAlign, Underline } from './PaperFormatting'
 
 export const paperExtensions = [
   StarterKit,
@@ -18,6 +19,9 @@ export const paperExtensions = [
   TableCell,
   Subscript,
   Superscript,
+  Underline,
+  PaperLink,
+  TextAlign,
 ]
 
 /** Read-only renderer for a paper (used for preview and for judges). Renders through the TipTap schema, never raw HTML. */

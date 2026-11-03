@@ -10,6 +10,9 @@ export interface Settings {
   fee_paise: number
   registration_open: boolean
   submission_deadline: string | null
+  competition_starts_at?: string | null
+  competition_ends_at?: string | null
+  results_announcement_at?: string | null
   results_published: boolean
   refund_policy: string
   rubric: RubricItem[]

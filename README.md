@@ -14,7 +14,7 @@ Full-stack competition portal: **React + TypeScript + Vite + Tailwind** frontend
 
 ### 1. Supabase
 1. Create a project at supabase.com.
-2. Apply the migrations — either `supabase link --project-ref <ref> && supabase db push`, or paste `001_schema.sql`, `002_rls_and_functions.sql`, `003_seed.sql` into the SQL editor in that order.
+2. Apply the migrations — either `supabase link --project-ref <ref> && supabase db push`, or paste `001_schema.sql`, `002_rls_and_functions.sql`, `003_seed.sql`, and `004_competition_workflow.sql` into the SQL editor in that order.
 3. **Authentication → Providers → Email**: keep *Confirm email* ON (participants must verify email).
 4. **Authentication → URL configuration**: add your site URL (`http://localhost:5173` and your Vercel domain) to redirect URLs.
 5. Sign up through the app with your own account, then make it admin:
@@ -28,8 +28,11 @@ cp supabase/.env.example supabase/.env      # fill in Razorpay + detection keys
 supabase secrets set --env-file supabase/.env
 supabase functions deploy create-order verify-payment run-originality
 supabase functions deploy razorpay-webhook --no-verify-jwt
+supabase functions deploy deliver-notification-email --no-verify-jwt
 ```
 In the Razorpay dashboard add a webhook → `https://<ref>.functions.supabase.co/razorpay-webhook`, events `payment.captured`, `order.paid`, `payment.failed`, using the secret you set as `RAZORPAY_WEBHOOK_SECRET`.
+
+For participant email notifications, set `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (a verified sender in Resend), and a long random `EMAIL_WEBHOOK_SECRET` as Supabase secrets. In Supabase Database → Webhooks, add an `INSERT` webhook for `public.email_outbox` targeting `https://<ref>.functions.supabase.co/deliver-notification-email`, with an `x-webhook-secret: <EMAIL_WEBHOOK_SECRET>` header. In-dashboard notifications are stored independently, so they remain available if email delivery is temporarily unavailable.
 
 ### 3. Frontend
 ```bash
@@ -65,5 +68,5 @@ Deploy to Vercel (import repo, add `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLIS
 3. **Image URLs.** Images live in a private bucket but are embedded as 1-year signed URLs, so anyone holding a URL can view that image. For stricter control, store storage paths and resolve signed URLs at render time.
 4. **Certificates** are rendered as a printable page (print → PDF), not generated PDF files.
 5. **Contact details** on the home page, organizer/partner names, and legal text (terms, privacy, refund wording) need your content. Have the refund policy reviewed.
-6. Test the whole flow with Razorpay **test keys** and a throwaway Supabase project first, including RLS (try reading another user's rows with the anon key).
-7. Email notifications (submission confirmation, results) are not wired up; Supabase Auth emails cover verification/reset only.
+6. Test the whole flow with Razorpay **test keys** and participant/admin accounts in a throwaway Supabase project first, including RLS (try reading another user's rows with the anon key).
+7. Configure the Resend secrets and `email_outbox` Database Webhook above before expecting transactional email delivery. Auth confirmation and password reset continue to use Supabase Auth email settings.
