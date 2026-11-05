@@ -12,7 +12,7 @@ export async function getUser(req: Request) {
     global: { headers: { Authorization: auth } },
   })
   const { data, error } = await client.auth.getUser()
-  return error ? null : data.user
+  return error || !data.user?.email_confirmed_at ? null : data.user
 }
 
 export async function hmacHex(secret: string, message: string): Promise<string> {

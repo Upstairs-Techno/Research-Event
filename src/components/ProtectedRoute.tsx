@@ -4,10 +4,11 @@ import { useAuth } from '../context/AuthContext'
 import type { Role } from '../lib/utils'
 
 export default function ProtectedRoute({ roles, children }: { roles?: Role[]; children: ReactNode }) {
-  const { user, role, loading } = useAuth()
+  const { user, role, loading, emailVerified } = useAuth()
   const loc = useLocation()
   if (loading) return <p className="p-10 text-center text-slate-500">Loading…</p>
-  if (!user) return <Navigate to="/login" state={{ from: loc.pathname }} replace />
+  if (!user) return <Navigate to="/login" state={{ from: loc.pathname, authError: `${loc.search}${loc.hash}` }} replace />
+  if (!emailVerified) return <Navigate to="/register" replace />
   if (roles && role && !roles.includes(role)) return <Navigate to="/" replace />
   return <>{children}</>
 }

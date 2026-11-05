@@ -9,7 +9,7 @@ export default function CompleteRegistration() {
   const { user, fullName } = useAuth()
   const nav = useNavigate()
   const [cats, setCats] = useState<Category[]>([])
-  const [f, setF] = useState({ mobile: '', institution: '', qualification: '', country: 'India', category_id: '', research_title: '', abstract: '' })
+  const [f, setF] = useState({ mobile: '', institution: '', qualification: '', country: 'India', state: '', city: '', category_id: '', research_title: '', abstract: '' })
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
@@ -17,6 +17,7 @@ export default function CompleteRegistration() {
   useEffect(() => {
     supabase.from('research_categories').select('id, name').eq('active', true).then(({ data }) => setCats(data ?? []))
     if (!user) return
+    setF((current) => ({ ...current, mobile: current.mobile || String(user.user_metadata.mobile ?? '') }))
     supabase.from('registrations').select('id').eq('user_id', user.id).maybeSingle()
       .then(({ data }) => { if (data) nav('/dashboard', { replace: true }) })
   }, [user, nav])
@@ -26,27 +27,38 @@ export default function CompleteRegistration() {
     if (!user) return
     setBusy(true); setErr('')
     const { data: part, error: pe } = await supabase.from('participants')
-      .upsert({ user_id: user.id, mobile: f.mobile, institution: f.institution, qualification: f.qualification, country: f.country }, { onConflict: 'user_id' })
+      .upsert({ user_id: user.id, mobile: f.mobile || String(user.user_metadata.mobile ?? ''), institution: f.institution, qualification: f.qualification, country: f.country, state: f.state, city: f.city }, { onConflict: 'user_id' })
       .select('id').single()
     if (pe || !part) { setErr(pe?.message ?? 'Could not save details'); setBusy(false); return }
-    const { error: re } = await supabase.from('registrations').insert({
+    const { error: re } = await supabase.from('registrations').upsert({
       user_id: user.id, participant_id: part.id, category_id: f.category_id,
       research_title: f.research_title, abstract: f.abstract,
-    })
+    }, { onConflict: 'user_id', ignoreDuplicates: true })
     if (re) { setErr(re.message); setBusy(false); return }
     nav('/payment')
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-12">
-      <form onSubmit={submit} className="card space-y-4">
-        <h1 className="font-serif text-2xl font-bold text-royal-800">Complete your registration</h1>
-        <p className="text-sm text-slate-500">Step 2 of 3 — {fullName} ({user?.email})</p>
+    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
+      <ol aria-label="Registration progress" className="mx-auto mb-7 grid max-w-2xl grid-cols-3">
+        {['Create account', 'Your details', 'Payment'].map((label, i) => <li key={label} className="relative flex flex-col items-center text-center text-[11px] font-semibold text-stone-500 sm:text-xs">
+          <span className={`z-10 flex h-9 w-9 items-center justify-center rounded-full border-2 ${i < 2 ? 'border-orange-600 bg-orange-600 text-white' : 'border-stone-300 bg-white'}`}>{i < 2 ? '✓' : i + 1}</span>
+          <span className="mt-2">{label}</span>{i < 2 && <span className="absolute left-[58%] top-[18px] h-px w-[84%] bg-orange-300" />}
+        </li>)}
+      </ol>
+      <form onSubmit={submit} className="mx-auto max-w-2xl rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_18px_60px_-35px_rgba(49,36,26,.35)] sm:p-8">
+        <h1 className="font-serif text-2xl font-bold text-royal-900">Your competition details</h1>
+        <p className="mt-1 text-sm text-stone-600">Step 2 of 3 · Tell us where you study and about your research.</p>
+        <p className="mt-3 rounded-lg bg-orange-50 px-3 py-2 text-xs text-stone-600">Signed in as <strong className="text-stone-800">{fullName} ({user?.email})</strong></p>
         <div className="grid gap-4 sm:grid-cols-2">
           <div><label className="label" htmlFor="m">Mobile number</label>
-            <input id="m" required className="input" value={f.mobile} onChange={(e) => set('mobile', e.target.value)} /></div>
+            <input id="m" type="tel" required className="input" placeholder="+91 98765 43210" value={f.mobile} onChange={(e) => set('mobile', e.target.value)} /></div>
           <div><label className="label" htmlFor="c">Country</label>
-            <input id="c" required className="input" value={f.country} onChange={(e) => set('country', e.target.value)} /></div>
+            <input id="c" required autoComplete="country-name" className="input" value={f.country} onChange={(e) => set('country', e.target.value)} /></div>
+          <div><label className="label" htmlFor="state">State / province</label>
+            <input id="state" required autoComplete="address-level1" className="input" value={f.state} onChange={(e) => set('state', e.target.value)} /></div>
+          <div><label className="label" htmlFor="city">City</label>
+            <input id="city" required autoComplete="address-level2" className="input" value={f.city} onChange={(e) => set('city', e.target.value)} /></div>
           <div><label className="label" htmlFor="i">Institution / organization</label>
             <input id="i" required className="input" value={f.institution} onChange={(e) => set('institution', e.target.value)} /></div>
           <div><label className="label" htmlFor="q">Qualification / designation</label>
