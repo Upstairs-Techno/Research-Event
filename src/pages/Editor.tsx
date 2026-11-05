@@ -404,13 +404,13 @@ function EditorInner({ initial, registration }: { initial: any; registration: an
       text-align: center;
       margin-bottom: 30px;
       padding-bottom: 20px;
-      border-bottom: 1.5px solid #061331;
+      border-bottom: 1.5px solid #e85d04;
     }
     .awards-badge {
       font-size: 9pt;
       text-transform: uppercase;
       letter-spacing: 2px;
-      color: #087fc4;
+      color: #bd4b00;
       font-weight: bold;
       margin-bottom: 8px;
     }
@@ -418,7 +418,7 @@ function EditorInner({ initial, registration }: { initial: any; registration: an
       font-size: 20pt;
       line-height: 1.3;
       margin: 10px 0;
-      color: #061331;
+      color: #29211c;
     }
     .meta-line {
       font-size: 10pt;
@@ -430,7 +430,7 @@ function EditorInner({ initial, registration }: { initial: any; registration: an
       background: #f9f9f9;
       padding: 12px 18px;
       margin: 20px 0 30px;
-      border-left: 3px solid #00c8ef;
+      border-left: 3px solid #b98220;
       font-size: 10pt;
     }
     .paper-body {
@@ -442,7 +442,7 @@ function EditorInner({ initial, registration }: { initial: any; registration: an
       letter-spacing: 0.5px;
       margin-top: 24px;
       margin-bottom: 8px;
-      color: #061331;
+      color: #29211c;
       border-bottom: 0.5px solid #ccc;
       padding-bottom: 3px;
     }
@@ -686,7 +686,7 @@ function EditorInner({ initial, registration }: { initial: any; registration: an
                     onClick={() => setSubmitModalOpen(true)}
                     disabled={!meetsPageReq}
                     title={!meetsPageReq ? 'Must be at least 3 pages (750 words) to submit' : ''}
-                    className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-[#00c8ef] hover:bg-[#83eaff] text-royal-950 shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-royal-700 hover:bg-royal-800 text-white shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <Send className="w-3.5 h-3.5" />
                     Submit Paper
@@ -1031,7 +1031,7 @@ function EditorInner({ initial, registration }: { initial: any; registration: an
             <div className="relative mx-auto rounded-2xl bg-white p-8 sm:p-14 shadow-md border border-slate-200 min-h-[750px]">
               {/* Document Header (Read-only banner inside canvas) */}
               <div className="text-center pb-6 mb-8 border-b border-slate-200">
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#087fc4]">
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-royal-700">
                   Research Distinction Awards 2026 · {registration.research_categories?.name}
                 </span>
                 <h2 className="font-serif text-2xl sm:text-3xl font-bold text-royal-950 mt-2 mb-1">
@@ -1104,7 +1104,7 @@ function EditorInner({ initial, registration }: { initial: any; registration: an
             </div>
             <div className="rounded-2xl bg-white p-8 sm:p-14 shadow-md border border-slate-200">
               <div className="text-center pb-6 mb-8 border-b border-slate-200">
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#087fc4]">
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-royal-700">
                   Research Distinction Awards 2026 · {registration.research_categories?.name}
                 </span>
                 <h1 className="font-serif text-3xl font-bold text-royal-950 mt-2 mb-2">

@@ -50,7 +50,7 @@ export default function Payment() {
         key: order.key_id, amount: order.amount, currency: order.currency, order_id: order.order_id,
         name: 'Research Distinction Awards', description: 'Registration fee',
         prefill: { name: fullName, email: user?.email },
-        theme: { color: '#3b0f7a' },
+        theme: { color: '#e85d04' },
         handler: async (resp: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
           const { data, error: ve } = await supabase.functions.invoke('verify-payment', { body: resp })
           if (ve || data?.error) setMsg(data?.error ?? ve?.message ?? 'Verification failed')

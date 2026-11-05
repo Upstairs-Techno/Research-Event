@@ -26,7 +26,7 @@ export default function Home() {
         </div>
         <div className="hero-art" aria-label="Research Distinction Awards emblem">
           <div className="orbit orbit-one"/><div className="orbit orbit-two"/>
-          <div className="art-center"><span>ज्ञानम्</span><i>✦</i><strong>RDA</strong><small>2025 · RESEARCH · EXCELLENCE</small></div>
+          <div className="art-center"><img src="/Research%20distinction%20event.jpeg" alt="Research Distinction Awards event artwork" /></div>
           <div className="art-caption">THE PURSUIT<br/>OF KNOWLEDGE</div>
         </div>
         <div className="hero-index">01 <span>—</span> RESEARCH · RECOGNITION · IMPACT</div>
@@ -36,6 +36,17 @@ export default function Home() {
         <div className="section-kicker">A DISTINCTION THAT MATTERS <span>✦</span></div>
         <div className="intro-grid"><h2>Where enduring wisdom<br/>meets <em>new discovery.</em></h2>
           <div><p>The Research Distinction Awards celebrate thoughtful, original research and the people who move knowledge forward. We bring together modern scientific inquiry and the depth of India’s Vedic knowledge systems in one academic platform.</p><p>Organized by <b>GI &amp; Knowlegram</b> with our collaborating organization, the awards give researchers a stage to share their work and be recognized for its contribution.</p></div>
+        </div>
+      </section>
+
+      <section className="partners-section">
+        <div className="section-wrap">
+          <div className="section-kicker">IN COLLABORATION WITH <span>✦</span></div>
+          <h2 className="partners-heading">Our event partners</h2>
+          <div className="partners-grid">
+            <div className="partner-card"><img src="/GI.jpeg" alt="GI partner logo" /></div>
+            <div className="partner-card"><img src="/know.jpeg" alt="Knowlegram partner logo" /></div>
+          </div>
         </div>
       </section>
 

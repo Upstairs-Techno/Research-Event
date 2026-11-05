@@ -131,7 +131,7 @@ export default function AdminDashboard() {
                     : 'text-slate-600 hover:bg-slate-50 hover:text-royal-900'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${tab === id ? 'text-[#83eaff]' : 'text-slate-400'}`} />
+                <Icon className={`w-4 h-4 ${tab === id ? 'text-gold-300' : 'text-slate-500'}`} />
                 <span className="truncate">{label}</span>
               </button>
             ))}
@@ -249,7 +249,7 @@ function OverviewTab() {
                 </div>
                 <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-royal-600 to-[#00c8ef]"
+                    className="h-full rounded-full bg-gradient-to-r from-royal-600 to-gold-300"
                     style={{ width: `${Math.max(4, pct)}%` }}
                   />
                 </div>
@@ -672,7 +672,7 @@ function SubmissionsReviewTab({ showMsg }: { showMsg: (m: string, t?: any) => vo
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-royal-950 text-white">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[#00c8ef]">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gold-300">
                   Academic Paper Review &amp; Evaluation
                 </span>
                 <h3 className="font-serif text-lg font-bold text-white truncate max-w-xl">

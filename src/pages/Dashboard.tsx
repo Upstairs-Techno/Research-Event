@@ -173,12 +173,12 @@ export default function Dashboard() {
       {/* ─────────────────────────────────────────────────────────────
           1. WELCOME HEADER & PARTICIPANT HERO
           ───────────────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#061331] via-[#092352] to-[#02091d] p-6 sm:p-8 text-white shadow-xl border border-gold-500/30">
+      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-royal-900 via-royal-800 to-royal-900 p-6 sm:p-8 text-white shadow-xl border border-gold-500/40">
         <div className="absolute -right-10 -bottom-10 h-64 w-64 rounded-full bg-gold-500/10 blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-gold-500/20 text-[#83eaff] border border-gold-500/40">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-gold-500/20 text-gold-300 border border-gold-500/40">
                 <Sparkles className="w-3.5 h-3.5" />
                 Participant Portal
               </span>
@@ -204,17 +204,17 @@ export default function Dashboard() {
 
             <div className="flex flex-wrap items-center gap-4 text-xs sm:text-sm text-slate-300">
               <span className="inline-flex items-center gap-1.5">
-                <Building className="w-4 h-4 text-[#83eaff]" />
+                <Building className="w-4 h-4 text-gold-300" />
                 {reg.participants?.institution || 'Institution Not Specified'}
               </span>
               <span className="hidden sm:inline text-white/30">•</span>
               <span className="inline-flex items-center gap-1.5">
-                <GraduationCap className="w-4 h-4 text-[#83eaff]" />
+                <GraduationCap className="w-4 h-4 text-gold-300" />
                 {reg.participants?.qualification || 'Researcher'}
               </span>
               <span className="hidden sm:inline text-white/30">•</span>
               <span className="inline-flex items-center gap-1.5">
-                <BookOpen className="w-4 h-4 text-[#83eaff]" />
+                <BookOpen className="w-4 h-4 text-gold-300" />
                 Category: <strong className="text-white">{reg.research_categories?.name}</strong>
               </span>
             </div>
@@ -225,7 +225,7 @@ export default function Dashboard() {
             {!paid ? (
               <Link
                 to="/payment"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-[#00c8ef] text-[#061331] hover:bg-[#83eaff] shadow-lg shadow-cyan-500/20 transition-all font-heading"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-gold-300 text-royal-900 hover:bg-gold-100 shadow-lg transition-all font-heading"
               >
                 Complete Payment (₹499)
                 <ArrowRight className="w-4 h-4" />
@@ -233,7 +233,7 @@ export default function Dashboard() {
             ) : (
               <Link
                 to="/editor"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-[#00c8ef] text-[#061331] hover:bg-[#83eaff] shadow-lg shadow-cyan-500/20 transition-all font-heading"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-gold-300 text-royal-900 hover:bg-gold-100 shadow-lg transition-all font-heading"
               >
                 {submitted ? (
                   <>
@@ -808,7 +808,7 @@ function CompetitionScheduleCard({ settings }: { settings: ReturnType<typeof use
 
         {/* Live Digital Countdown Unit */}
         <div className="flex flex-col items-center justify-center rounded-2xl bg-royal-950 p-5 text-white shadow-md border border-royal-800 min-w-[260px]">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-[#83eaff] text-center mb-3">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-gold-300 text-center mb-3">
             {isUpcoming
               ? 'Competition Begins In'
               : isInProgress
@@ -830,7 +830,7 @@ function CompetitionScheduleCard({ settings }: { settings: ReturnType<typeof use
               <span className="text-[9px] uppercase tracking-wider text-slate-300">Mins</span>
             </div>
             <div className="flex flex-col items-center bg-white/10 rounded-xl px-2.5 py-2 min-w-[50px] border border-white/10">
-              <span className="font-mono text-xl sm:text-2xl font-bold text-[#00c8ef]">{fmt(seconds)}</span>
+              <span className="font-mono text-xl sm:text-2xl font-bold text-gold-300">{fmt(seconds)}</span>
               <span className="text-[9px] uppercase tracking-wider text-slate-300">Secs</span>
             </div>
           </div>

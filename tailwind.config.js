@@ -4,10 +4,10 @@ export default {
   theme: {
     extend: {
       colors: {
-        royal: { 50: '#e7eae5', 100: '#c7d0d6', 600: '#2557ff', 700: '#5c7dff', 800: '#0e1524', 900: '#161f33' },
-        gold: { 100: '#f7eadb', 300: '#e4b77e', 500: '#c98a3e', 600: '#a96d27' },
+        royal: { 50: '#fff4e8', 100: '#ffe4c7', 200: '#f4d2ad', 600: '#e85d04', 700: '#c94d00', 800: '#38271c', 900: '#29211c', 950: '#211912' },
+        gold: { 100: '#fff4dc', 300: '#edc982', 500: '#b98220', 600: '#946414' },
       },
-      fontFamily: { serif: ['Nunito', 'sans-serif'] },
+      fontFamily: { serif: ['Manrope', 'sans-serif'] },
     },
   },
   plugins: [],
