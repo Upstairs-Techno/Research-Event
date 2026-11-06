@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fmtDate, rupees } from '../lib/utils'
 import ReportPanel from '../components/ReportPanel'
@@ -30,17 +30,24 @@ import {
   X,
   Send,
   Sparkles,
-  Trophy
+  Trophy,
+  UserPlus,
+  Pencil,
+  KeyRound,
+  Power,
+  Trash2,
+  EyeOff
 } from 'lucide-react'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-type Tab = 'overview' | 'registrations' | 'payments' | 'submissions' | 'judges' | 'results' | 'settings' | 'audit'
+type Tab = 'overview' | 'registrations' | 'payments' | 'submissions' | 'evaluations' | 'judges' | 'results' | 'settings' | 'audit'
 
 const TABS: { id: Tab; label: string; icon: any }[] = [
   { id: 'overview', label: 'Overview & Analytics', icon: LayoutDashboard },
   { id: 'registrations', label: 'Participants', icon: Users },
   { id: 'payments', label: 'Payments', icon: CreditCard },
   { id: 'submissions', label: 'Review Submissions', icon: FileText },
+  { id: 'evaluations', label: 'Evaluation Approval', icon: CheckCircle2 },
   { id: 'judges', label: 'Judges Management', icon: ShieldCheck },
   { id: 'results', label: 'Results & Awards', icon: Award },
   { id: 'settings', label: 'Competition Settings', icon: Settings },
@@ -65,10 +72,10 @@ export default function AdminDashboard() {
   const [tab, setTab] = useState<Tab>('overview')
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null)
 
-  const showMsg = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
+  const showMsg = useCallback((text: string, type: 'success' | 'error' | 'info' = 'success') => {
     setMsg({ text, type })
     window.setTimeout(() => setMsg(null), 6000)
-  }
+  }, [])
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 py-8">
@@ -144,6 +151,7 @@ export default function AdminDashboard() {
           {tab === 'registrations' && <RegistrationsTab showMsg={showMsg} />}
           {tab === 'payments' && <PaymentsTab />}
           {tab === 'submissions' && <SubmissionsReviewTab showMsg={showMsg} />}
+          {tab === 'evaluations' && <EvaluationApprovalTab showMsg={showMsg} />}
           {tab === 'judges' && <JudgesTab showMsg={showMsg} />}
           {tab === 'results' && <ResultsManagementTab showMsg={showMsg} />}
           {tab === 'settings' && <SettingsTab showMsg={showMsg} />}
@@ -152,6 +160,122 @@ export default function AdminDashboard() {
       </div>
     </div>
   )
+}
+
+function EvaluationApprovalTab({ showMsg }: { showMsg: (m: string, t?: any) => void }) {
+  const [rows, setRows] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [reasons, setReasons] = useState<Record<string, string>>({})
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const { data: evaluations, error } = await supabase.from('evaluations')
+      .select('id, submission_id, judge_id, scores, total, feedback, status, approved, updated_at')
+      .eq('status', 'submitted').eq('approved', false).order('updated_at', { ascending: true })
+    if (error) {
+      showMsg(`Could not load evaluations: ${error.message}`, 'error')
+      setRows([]); setLoading(false); return
+    }
+    const evals = evaluations ?? []
+    const submissionIds = [...new Set(evals.map((e) => e.submission_id))]
+    const profileIds = [...new Set(evals.map((e) => e.judge_id))]
+    const [{ data: submissions, error: subError }, { data: judges, error: judgeError }] = await Promise.all([
+      submissionIds.length ? supabase.from('submissions').select('id, title, user_id').in('id', submissionIds) : Promise.resolve({ data: [], error: null } as any),
+      profileIds.length ? supabase.from('profiles').select('id, full_name, email').in('id', profileIds) : Promise.resolve({ data: [], error: null } as any),
+    ])
+    if (subError || judgeError) {
+      showMsg(`Could not load evaluation details: ${(subError || judgeError)?.message}`, 'error')
+      setRows([]); setLoading(false); return
+    }
+    const submissionRows = submissions ?? []
+    const authorIds = [...new Set(submissionRows.map((s: any) => s.user_id))]
+    const { data: authors, error: authorError } = authorIds.length
+      ? await supabase.from('profiles').select('id, full_name, email').in('id', authorIds)
+      : { data: [], error: null }
+    if (authorError) {
+      showMsg(`Could not load participant details: ${authorError.message}`, 'error')
+      setRows([]); setLoading(false); return
+    }
+    const submissionMap = new Map(submissionRows.map((s: any) => [s.id, s]))
+    const profileMap = new Map([...(judges ?? []), ...(authors ?? [])].map((p: any) => [p.id, p]))
+    setRows(evals.map((e) => {
+      const submission: any = submissionMap.get(e.submission_id)
+      return { ...e, submission, participant: submission ? profileMap.get(submission.user_id) : null, judge: profileMap.get(e.judge_id) }
+    }))
+    setLoading(false)
+  }, [showMsg])
+
+  useEffect(() => { load() }, [load])
+
+  const approvePaper = async (submissionId: string) => {
+    if (!window.confirm('Approve all submitted evaluations for this paper? This action affects every submitted evaluation for the paper.')) return
+    setBusy(submissionId)
+    const { error } = await supabase.rpc('approve_evaluations', { p_submission: submissionId })
+    setBusy(null)
+    if (error) { showMsg(`Evaluation approval failed: ${error.message}`, 'error'); return }
+    showMsg('Submitted evaluations for this paper were approved.')
+    await load()
+  }
+
+  const rejectEvaluation = async (evaluationId: string) => {
+    const reason = (reasons[evaluationId] ?? '').trim()
+    if (!reason) { showMsg('Enter a reason before rejecting an evaluation.', 'error'); return }
+    if (!window.confirm(`Reject this evaluation with the following reason?\n\n${reason}`)) return
+    setBusy(evaluationId)
+    const { error } = await supabase.rpc('reject_evaluation', { p_evaluation: evaluationId, p_reason: reason })
+    setBusy(null)
+    if (error) { showMsg(`Evaluation rejection failed: ${error.message}`, 'error'); return }
+    showMsg('Evaluation rejected. The judge can revise it and submit it again.')
+    setReasons((current) => { const next = { ...current }; delete next[evaluationId]; return next })
+    await load()
+  }
+
+  const grouped = rows.reduce((map: Map<string, any[]>, row) => {
+    const list = map.get(row.submission_id) ?? []
+    list.push(row); map.set(row.submission_id, list); return map
+  }, new Map())
+
+  return <section className="space-y-4">
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div><h2 className="font-serif text-lg font-bold text-royal-950">Evaluations Awaiting Approval</h2>
+        <p className="text-xs text-slate-500">Review submitted judge scores before they can be used to publish results.</p></div>
+      <button onClick={load} className="btn-outline !py-2 !text-xs"><RefreshCw className="w-3.5 h-3.5" /> Refresh</button>
+    </div>
+    {loading ? <p className="rounded-2xl bg-white p-8 text-center text-xs text-slate-500">Loading evaluations…</p>
+      : rows.length === 0 ? <p className="rounded-2xl bg-white p-8 text-center text-xs text-slate-500">No submitted evaluations are awaiting approval.</p>
+      : [...grouped.entries()].map(([submissionId, evaluations]) => <article key={submissionId} className="rounded-2xl bg-white p-5 shadow-sm border border-slate-200 space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><h3 className="font-serif font-bold text-royal-950">{evaluations[0].submission?.title || 'Untitled submission'}</h3>
+            <p className="text-xs text-slate-500">Participant: {evaluations[0].participant?.full_name || 'Unknown'} ({evaluations[0].participant?.email || 'No email'})</p></div>
+          <button disabled={busy === submissionId} onClick={() => approvePaper(submissionId)} className="btn-primary !py-2 !text-xs disabled:opacity-50">
+            <CheckCircle2 className="w-3.5 h-3.5" /> {busy === submissionId ? 'Approving…' : 'Approve submitted evaluations'}
+          </button>
+        </div>
+        <div className="space-y-3">
+          {evaluations.map((e: any) => <div key={e.id} className="rounded-xl border border-slate-200 p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div><p className="text-xs font-bold text-slate-800">Judge: {e.judge?.full_name || 'Unknown'} ({e.judge?.email || e.judge_id})</p>
+                <p className="text-[11px] text-slate-500">Status: {e.status} · Submitted/updated: {fmtDate(e.updated_at)}</p></div>
+              <span className="rounded-full bg-purple-100 px-3 py-1 font-mono text-xs font-bold text-purple-800">{Number(e.total).toFixed(2)} / 100</span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg bg-slate-50 p-3"><p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Scores</p>
+                <pre className="whitespace-pre-wrap break-words text-[11px] text-slate-700">{JSON.stringify(e.scores, null, 2)}</pre></div>
+              <div className="rounded-lg bg-slate-50 p-3"><p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Judge feedback</p>
+                <p className="whitespace-pre-wrap text-xs text-slate-700">{e.feedback || 'No feedback provided.'}</p></div>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input value={reasons[e.id] ?? ''} onChange={(event) => setReasons({ ...reasons, [e.id]: event.target.value })}
+                placeholder="Reason required to reject this evaluation" className="input flex-1 text-xs" aria-label="Rejection reason" />
+              <button disabled={busy === e.id} onClick={() => rejectEvaluation(e.id)} className="btn-outline !py-2 !text-xs text-red-700 disabled:opacity-50">
+                <XCircle className="w-3.5 h-3.5" /> {busy === e.id ? 'Rejecting…' : 'Reject evaluation'}
+              </button>
+            </div>
+          </div>)}
+        </div>
+      </article>)}
+  </section>
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -1070,88 +1194,203 @@ function ResultsManagementTab({ showMsg }: { showMsg: (m: string, t?: any) => vo
    6. JUDGES MANAGEMENT TAB
    ───────────────────────────────────────────────────────────────────────────── */
 function JudgesTab({ showMsg }: { showMsg: (m: string, t?: any) => void }) {
-  const [email, setEmail] = useState('')
   const [judges, setJudges] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [existingEmail, setExistingEmail] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  const [modal, setModal] = useState<'create' | 'details' | 'edit' | 'password' | null>(null)
+  const [selected, setSelected] = useState<any>(null)
+  const [form, setForm] = useState({ fullName: '', email: '', password: '', confirmPassword: '', accountActive: true })
+  const [showPassword, setShowPassword] = useState(false)
 
-  const load = useCallback(() => {
-    supabase
-      .from('judges')
-      .select('user_id, profiles(full_name, email)')
-      .then(({ data }) => setJudges(data ?? []))
-  }, [])
+  const load = useCallback(async () => {
+    setLoading(true)
+    const { data, error } = await supabase.functions.invoke('admin-judge-management', { body: { action: 'list' } })
+    if (error) showMsg(`Could not load judge accounts: ${error.message}`, 'error')
+    else setJudges(data?.judges ?? [])
+    setLoading(false)
+  }, [showMsg])
 
-  useEffect(load, [load])
+  useEffect(() => { load() }, [load])
 
-  const setRole = async (role: 'judge' | 'participant') => {
-    const { error } = await supabase.rpc('admin_set_role', { p_email: email.trim(), p_role: role })
-    if (error) {
-      showMsg(error.message, 'error')
-    } else {
-      showMsg(`User role updated to ${role}.`)
-      setEmail('')
-      load()
-    }
+  const closeModal = () => {
+    setModal(null); setSelected(null); setShowPassword(false)
+    setForm({ fullName: '', email: '', password: '', confirmPassword: '', accountActive: true })
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200 space-y-4">
-        <h2 className="font-serif text-base font-bold text-royal-950">
-          Promote Juror / Reviewer
-        </h2>
-        <p className="text-xs text-slate-600">
-          Enter the registered email of an academic peer to grant them Juror access to evaluate assigned research papers.
-        </p>
+  const invoke = async (action: string, payload: Record<string, unknown>, success: string, busyId: string) => {
+    setBusy(busyId)
+    const { data, error } = await supabase.functions.invoke('admin-judge-management', { body: { action, ...payload } })
+    setBusy(null)
+    let errorText = data?.error as string | undefined
+    if (error && !errorText) {
+      try { errorText = (await (error as any).context?.json())?.error } catch { /* keep the generic Functions error */ }
+    }
+    if (error || errorText) { showMsg(errorText || error?.message || 'Judge management request failed.', 'error'); return false }
+    showMsg(success)
+    await load()
+    return true
+  }
 
-        <div className="flex flex-wrap items-end gap-3 max-w-xl">
-          <div className="flex-1 min-w-[240px]">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="juror@university.edu"
-              className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-royal-500"
-            />
-          </div>
-          <button
-            disabled={!email.trim()}
-            onClick={() => setRole('judge')}
-            className="btn-primary !py-2.5 !text-xs"
-          >
-            Grant Judge Role
-          </button>
-          <button
-            disabled={!email.trim()}
-            onClick={() => setRole('participant')}
-            className="btn-outline !py-2.5 !text-xs"
-          >
-            Demote
-          </button>
-        </div>
-      </div>
+  const generateTemporaryPassword = () => {
+    const bytes = new Uint8Array(20)
+    window.crypto.getRandomValues(bytes)
+    const pools = ['abcdefghijkmnopqrstuvwxyz', 'ABCDEFGHJKLMNPQRSTUVWXYZ', '23456789', '!@#$%&*?']
+    const chars = pools.map((pool, i) => pool[bytes[i] % pool.length])
+    const all = pools.join('')
+    const rest = Array.from(bytes.slice(4), (b) => all[b % all.length])
+    const nextChars = [...chars, ...rest]
+    for (let i = nextChars.length - 1; i > 0; i--) {
+      const random = new Uint32Array(1)
+      window.crypto.getRandomValues(random)
+      const j = random[0] % (i + 1)
+      ;[nextChars[i], nextChars[j]] = [nextChars[j], nextChars[i]]
+    }
+    const next = nextChars.join('')
+    setForm((f) => ({ ...f, password: next, confirmPassword: next }))
+    setShowPassword(true)
+  }
 
-      <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200 space-y-3">
-        <h3 className="font-serif text-base font-bold text-royal-950">Active Jurors</h3>
-        {judges.length === 0 ? (
-          <p className="text-xs text-slate-500 py-3">No jurors registered yet.</p>
-        ) : (
-          <ul className="divide-y divide-slate-100 text-xs">
-            {judges.map((j) => (
-              <li key={j.user_id} className="py-2.5 flex items-center justify-between">
-                <div>
-                  <span className="font-bold text-royal-900">{j.profiles?.full_name}</span>
-                  <span className="text-slate-500 ml-2">({j.profiles?.email})</span>
-                </div>
-                <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold">
-                  Academic Juror
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+  const submitCreate = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!form.fullName.trim() || !form.email.trim() || !form.password || !form.confirmPassword) { showMsg('Complete every required field.', 'error'); return }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) { showMsg('Enter a valid email address.', 'error'); return }
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{12,}$/.test(form.password)) {
+      showMsg('Password must be 12+ characters and include uppercase, lowercase, number, and symbol.', 'error'); return
+    }
+    if (form.password !== form.confirmPassword) { showMsg('Passwords do not match.', 'error'); return }
+    const ok = await invoke('create', { fullName: form.fullName.trim(), email: form.email.trim(), password: form.password }, 'Judge account created. Share the initial password securely.', 'create')
+    if (ok) closeModal()
+  }
+
+  const submitEdit = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!selected) return
+    if (selected.account_active && !form.accountActive && !window.confirm('Deactivate this judge? They will lose judge access immediately.')) return
+    if (!selected.account_active && form.accountActive && !window.confirm('Reactivate this judge account? Existing assignments will become accessible again.')) return
+    const ok = await invoke('update', { userId: selected.id, fullName: form.fullName.trim(), email: form.email.trim(), accountActive: form.accountActive }, 'Judge details updated.', selected.id)
+    if (ok) closeModal()
+  }
+
+  const submitPassword = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!selected) return
+    if (!form.password || form.password !== form.confirmPassword) { showMsg('Enter matching new passwords.', 'error'); return }
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{12,}$/.test(form.password)) {
+      showMsg('Password must be 12+ characters and include uppercase, lowercase, number, and symbol.', 'error'); return
+    }
+    if (!window.confirm(`Reset the password for ${selected.full_name}? The current password cannot be viewed or recovered.`)) return
+    const ok = await invoke('reset_password', { userId: selected.id, password: form.password }, 'Password reset successfully. Share it securely with the judge.', selected.id)
+    if (ok) closeModal()
+  }
+
+  const openEdit = (judge: any) => {
+    setSelected(judge); setForm({ fullName: judge.full_name, email: judge.email, password: '', confirmPassword: '', accountActive: judge.account_active }); setModal('edit')
+  }
+  const openPassword = (judge: any) => {
+    setSelected(judge); setForm({ fullName: '', email: '', password: '', confirmPassword: '', accountActive: judge.account_active }); setModal('password')
+  }
+  const toggleStatus = async (judge: any) => {
+    const next = !judge.account_active
+    if (!window.confirm(`${next ? 'Activate' : 'Deactivate'} ${judge.full_name}'s account?`)) return
+    await invoke('set_status', { userId: judge.id, active: next }, `Judge ${next ? 'activated' : 'deactivated'}.`, judge.id)
+  }
+  const deleteJudge = async (judge: any) => {
+    if (!window.confirm(`Permanently delete ${judge.full_name}'s account? Deletion is allowed only when no papers or evaluations reference this judge.`)) return
+    await invoke('delete', { userId: judge.id }, 'Judge account deleted.', judge.id)
+  }
+
+  const updateExistingRole = async (role: 'judge' | 'participant') => {
+    const email = existingEmail.trim().toLowerCase()
+    if (!email) { showMsg('Enter the registered account email.', 'error'); return }
+    if (role === 'participant' && !window.confirm(`Remove judge access for ${email}? Assignment and evaluation history will be preserved.`)) return
+    setBusy(`role:${email}`)
+    const { error } = await supabase.rpc('admin_set_role', { p_email: email, p_role: role })
+    setBusy(null)
+    if (error) { showMsg(error.message, 'error'); return }
+    setExistingEmail('')
+    showMsg(role === 'judge' ? 'Registered account promoted to judge.' : 'Judge access removed; existing records were preserved.')
+    await load()
+  }
+
+  const visible = judges.filter((judge) => {
+    const match = `${judge.full_name} ${judge.email}`.toLowerCase().includes(query.trim().toLowerCase())
+    return match && (statusFilter === 'all' || (statusFilter === 'active') === judge.account_active)
+  })
+
+  const passwordFields = <>
+    <div className="space-y-1"><label className="label">{modal === 'password' ? 'New password' : 'Password'}</label>
+      <div className="flex gap-2"><input required type={showPassword ? 'text' : 'password'} autoComplete="new-password" className="input flex-1" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+        <button type="button" className="btn-outline !px-3" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div>
+    </div>
+    <div className="space-y-1"><label className="label">Confirm password</label><input required type={showPassword ? 'text' : 'password'} autoComplete="new-password" className="input" value={form.confirmPassword} onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })} /></div>
+    <p className="text-[11px] text-slate-500">Use at least 12 characters with uppercase, lowercase, a number, and a symbol. Passwords are sent directly to Supabase Auth and are never stored by this app.</p>
+  </>
+
+  return <div className="space-y-5">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div><h2 className="font-serif text-lg font-bold text-royal-950">Judge Accounts</h2><p className="text-xs text-slate-500">Create and manage judge access, assignments, and evaluations.</p></div>
+      <button onClick={() => { setForm({ fullName: '', email: '', password: '', confirmPassword: '', accountActive: true }); setModal('create') }} className="btn-primary !py-2.5 !text-xs"><UserPlus className="h-4 w-4" /> Create Judge Account</button>
+    </div>
+
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h3 className="font-serif text-base font-bold text-royal-950">Manage an existing account</h3>
+      <p className="mt-1 text-xs text-slate-500">Promote a registered user to judge or remove judge access. History is retained.</p>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <input type="email" className="input flex-1" placeholder="registered.user@example.com" value={existingEmail} onChange={(e) => setExistingEmail(e.target.value)} />
+        <button disabled={!existingEmail.trim() || busy === `role:${existingEmail.trim().toLowerCase()}`} onClick={() => updateExistingRole('judge')} className="btn-primary !py-2 !text-xs">Promote to Judge</button>
+        <button disabled={!existingEmail.trim() || busy === `role:${existingEmail.trim().toLowerCase()}`} onClick={() => updateExistingRole('participant')} className="btn-outline !py-2 !text-xs">Demote to Participant</button>
       </div>
     </div>
-  )
+
+    <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row">
+      <div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input className="input pl-9" placeholder="Search judges by name or email" value={query} onChange={(e) => setQuery(e.target.value)} /></div>
+      <select className="input sm:w-44" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}><option value="all">All accounts</option><option value="active">Active</option><option value="inactive">Inactive</option></select>
+      <button onClick={load} className="btn-outline !py-2 !text-xs"><RefreshCw className="h-3.5 w-3.5" /> Refresh</button>
+    </div>
+
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      {loading ? <p className="p-8 text-center text-xs text-slate-500">Loading judge accounts…</p> : visible.length === 0 ? <p className="p-8 text-center text-xs text-slate-500">No judges match this search.</p> : <div className="overflow-x-auto">
+        <table className="w-full min-w-[1050px] text-left text-xs">
+          <thead className="border-b border-slate-200 bg-royal-50 text-[10px] font-semibold uppercase tracking-wider text-royal-900"><tr>
+            <th className="px-4 py-3">Judge ID</th><th className="px-4 py-3">Full Name</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Assigned Papers</th><th className="px-4 py-3">Evaluations</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Created</th><th className="px-4 py-3">Actions</th>
+          </tr></thead><tbody className="divide-y divide-slate-100">{visible.map((judge) => <tr key={judge.id}>
+            <td className="px-4 py-3 font-mono text-[10px] text-slate-500" title={judge.id}>{judge.id}</td><td className="px-4 py-3 font-semibold text-slate-900">{judge.full_name}</td><td className="px-4 py-3 text-slate-600">{judge.email}</td>
+            <td className="px-4 py-3">{judge.assigned_papers.length}</td><td className="px-4 py-3">{judge.evaluation_count} total · {judge.completed_evaluations} complete · {judge.pending_evaluations} pending</td>
+            <td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${judge.account_active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>{judge.account_active ? 'Active' : 'Inactive'}</span></td>
+            <td className="px-4 py-3 whitespace-nowrap text-slate-500">{fmtDate(judge.created_at)}</td><td className="px-4 py-3"><div className="flex gap-1">
+      <button title="View details" aria-label="View details" onClick={() => { setSelected(judge); setModal('details') }} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"><Eye className="h-4 w-4" /></button>
+              <button title="Edit judge" aria-label="Edit judge" onClick={() => openEdit(judge)} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"><Pencil className="h-4 w-4" /></button>
+              <button title="Reset password" aria-label="Reset password" onClick={() => openPassword(judge)} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"><KeyRound className="h-4 w-4" /></button>
+              <button title={judge.account_active ? 'Deactivate' : 'Activate'} aria-label={judge.account_active ? 'Deactivate judge' : 'Activate judge'} disabled={busy === judge.id} onClick={() => toggleStatus(judge)} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 disabled:opacity-40"><Power className="h-4 w-4" /></button>
+              <button title="Delete judge" aria-label="Delete judge" disabled={busy === judge.id} onClick={() => deleteJudge(judge)} className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-40"><Trash2 className="h-4 w-4" /></button>
+            </div></td>
+          </tr>)}</tbody>
+        </table>
+      </div>}
+    </div>
+
+    {modal && <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-black/60 p-4" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) closeModal() }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="judge-modal-title" className="my-auto max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+        <div className="mb-5 flex items-center justify-between"><h2 id="judge-modal-title" className="font-serif text-xl font-bold text-royal-950">{modal === 'create' ? 'Create judge account' : modal === 'details' ? 'Judge details' : modal === 'edit' ? 'Edit judge account' : 'Reset judge password'}</h2><button onClick={closeModal} aria-label="Close" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X className="h-4 w-4" /></button></div>
+        <>
+        {modal === 'details' && selected && <div className="space-y-4 text-sm">
+          <div className="grid gap-3 sm:grid-cols-2"><Detail label="Judge ID" value={selected.id} /><Detail label="Full Name" value={selected.full_name} /><Detail label="Email" value={selected.email} /><Detail label="Account Status" value={selected.account_active ? 'Active' : 'Inactive'} /><Detail label="Assigned Papers" value={String(selected.assigned_papers.length)} /><Detail label="Completed Evaluations" value={String(selected.completed_evaluations)} /><Detail label="Pending Evaluations" value={String(selected.pending_evaluations)} /><Detail label="Account Created" value={fmtDate(selected.created_at)} /><Detail label="Last Login" value={fmtDate(selected.last_sign_in_at)} /></div>
+          <div><p className="mb-2 text-xs font-bold uppercase text-slate-500">Assigned papers</p>{selected.assigned_papers.length ? <ul className="list-disc space-y-1 pl-5 text-xs text-slate-700">{selected.assigned_papers.map((paper: any) => <li key={paper.id}>{paper.title}</li>)}</ul> : <p className="text-xs text-slate-500">No papers assigned.</p>}</div>
+        </div>}
+        {modal === 'create' && <form onSubmit={submitCreate} className="space-y-4"><div className="space-y-1"><label className="label">Full name</label><input required className="input" autoComplete="name" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></div><div className="space-y-1"><label className="label">Email address</label><input required type="email" className="input" autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>{passwordFields}<div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={generateTemporaryPassword} className="btn-outline !text-xs">Generate temporary password</button><button type="button" disabled={!form.password} onClick={() => navigator.clipboard.writeText(form.password).then(() => showMsg('Password copied. Deliver it securely.'), () => showMsg('Could not copy password. Select and copy it manually.', 'error'))} className="btn-outline !text-xs">Copy password</button><button disabled={busy === 'create'} className="btn-primary !text-xs">{busy === 'create' ? 'Creating…' : 'Create Judge Account'}</button></div></form>}
+        {modal === 'edit' && selected && <form onSubmit={submitEdit} className="space-y-4"><div className="space-y-1"><label className="label">Full name</label><input required className="input" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></div><div className="space-y-1"><label className="label">Email address</label><input required type="email" className="input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /><p className="text-[11px] text-slate-500">This updates Supabase Auth and the profile email immediately as an administrator action.</p></div><div className="space-y-1"><label className="label">Account status</label><select className="input" value={String(form.accountActive)} onChange={(e) => setForm({ ...form, accountActive: e.target.value === 'true' })}><option value="true">Active</option><option value="false">Inactive</option></select></div><div className="flex justify-end"><button disabled={busy === selected.id} className="btn-primary !text-xs">{busy === selected.id ? 'Saving…' : 'Save changes'}</button></div></form>}
+        {modal === 'password' && selected && <form onSubmit={submitPassword} className="space-y-4">{passwordFields}<div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={generateTemporaryPassword} className="btn-outline !text-xs">Generate temporary password</button><button type="button" disabled={!form.password} onClick={() => navigator.clipboard.writeText(form.password).then(() => showMsg('Password copied. Deliver it securely.'), () => showMsg('Could not copy password. Select and copy it manually.', 'error'))} className="btn-outline !text-xs">Copy password</button><button disabled={busy === selected.id} className="btn-primary !text-xs">{busy === selected.id ? 'Resetting…' : 'Reset password'}</button></div></form>}
+        </>
+      </div>
+    </div>}
+  </div>
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 break-all text-xs text-slate-800">{value || '—'}</p></div>
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────

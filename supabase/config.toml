@@ -11,3 +11,6 @@ enable_confirmations = true
 # Razorpay calls this endpoint without a Supabase JWT; it is protected by its HMAC signature instead.
 [functions.razorpay-webhook]
 verify_jwt = false
+
+[functions.admin-judge-management]
+verify_jwt = true

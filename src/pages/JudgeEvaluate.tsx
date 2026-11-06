@@ -17,6 +17,7 @@ export default function JudgeEvaluate() {
   const [activity, setActivity] = useState<any[]>([])
   const [scores, setScores] = useState<Record<string, number>>({})
   const [feedback, setFeedback] = useState('')
+  const [rejectionReason, setRejectionReason] = useState('')
   const [evalStatus, setEvalStatus] = useState<'draft' | 'submitted' | null>(null)
   const [msg, setMsg] = useState('')
 
@@ -33,7 +34,7 @@ export default function JudgeEvaluate() {
         supabase.from('evaluations').select('*').eq('submission_id', s.id).eq('judge_id', user.id).maybeSingle(),
       ])
       setReg(r); setReports(rep ?? []); setActivity(act ?? [])
-      if (ev) { setScores(ev.scores ?? {}); setFeedback(ev.feedback); setEvalStatus(ev.status) }
+      if (ev) { setScores(ev.scores ?? {}); setFeedback(ev.feedback); setEvalStatus(ev.status); setRejectionReason(ev.rejection_reason ?? '') }
     })()
   }, [submissionId, user])
 
@@ -50,7 +51,7 @@ export default function JudgeEvaluate() {
     if (status === 'submitted' && rubric.some((r) => scores[r.key] == null)) { setMsg('Score every criterion before submitting.'); return }
     if (status === 'submitted' && !confirm('Submit your evaluation? You cannot change it afterwards.')) return
     const { error } = await supabase.from('evaluations').upsert(
-      { submission_id: sub.id, judge_id: user!.id, scores, total, feedback, status, updated_at: new Date().toISOString() },
+      { submission_id: sub.id, judge_id: user!.id, scores, total, feedback, status, rejection_reason: null, updated_at: new Date().toISOString() },
       { onConflict: 'submission_id,judge_id' })
     if (error) { setMsg(error.message); return }
     setEvalStatus(status); setMsg(status === 'submitted' ? 'Evaluation submitted.' : 'Draft saved.')
@@ -89,6 +90,10 @@ export default function JudgeEvaluate() {
 
           <div className="card space-y-3">
             <h2 className="font-semibold text-royal-800">Evaluation</h2>
+            {rejectionReason && <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              <p className="font-semibold">Administrator requested revisions</p>
+              <p className="mt-1 whitespace-pre-wrap">{rejectionReason}</p>
+            </div>}
             {rubric.map((r) => (
               <div key={r.key}>
                 <label className="label" htmlFor={r.key}>{r.label} <span className="text-slate-400">({r.weight}%)</span> — {scores[r.key] ?? 0}/10</label>
