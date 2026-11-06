@@ -6,7 +6,7 @@ additional_redirect_urls = ["http://localhost:5173"]
 
 [auth.email]
 enable_signup = true
-enable_confirmations = true
+enable_confirmations = false
 
 # Razorpay calls this endpoint without a Supabase JWT; it is protected by its HMAC signature instead.
 [functions.razorpay-webhook]

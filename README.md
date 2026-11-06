@@ -14,8 +14,8 @@ Full-stack competition portal: **React + TypeScript + Vite + Tailwind** frontend
 
 ### 1. Supabase
 1. Create a project at supabase.com.
-2. Apply the migrations — either `supabase link --project-ref <ref> && supabase db push`, or paste `001_schema.sql`, `002_rls_and_functions.sql`, `003_seed.sql`, and `004_competition_workflow.sql` into the SQL editor in that order.
-3. **Authentication → Providers → Email**: keep *Confirm email* ON (participants must verify email).
+2. Apply all migrations in order — either `supabase link --project-ref <ref> && supabase db push`, or paste every file in `supabase/migrations/` in numerical order.
+3. **Authentication → Providers → Email**: turn *Confirm email* OFF so accounts can continue directly to participant details without an email-verification step.
 4. **Authentication → URL configuration**: add your site URL (`http://localhost:5173` and your Vercel domain) to redirect URLs.
 5. Sign up through the app with your own account, then make it admin:
    ```sql
@@ -29,6 +29,7 @@ supabase secrets set --env-file supabase/.env
 supabase functions deploy create-order verify-payment run-originality
 supabase functions deploy razorpay-webhook --no-verify-jwt
 supabase functions deploy deliver-notification-email --no-verify-jwt
+supabase functions deploy admin-judge-management
 ```
 In the Razorpay dashboard add a webhook → `https://<ref>.functions.supabase.co/razorpay-webhook`, events `payment.captured`, `order.paid`, `payment.failed`, using the secret you set as `RAZORPAY_WEBHOOK_SECRET`.
 
@@ -69,4 +70,4 @@ Deploy to Vercel (import repo, add `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLIS
 4. **Certificates** are rendered as a printable page (print → PDF), not generated PDF files.
 5. **Contact details** on the home page, organizer/partner names, and legal text (terms, privacy, refund wording) need your content. Have the refund policy reviewed.
 6. Test the whole flow with Razorpay **test keys** and participant/admin accounts in a throwaway Supabase project first, including RLS (try reading another user's rows with the anon key).
-7. Configure the Resend secrets and `email_outbox` Database Webhook above before expecting transactional email delivery. Auth confirmation and password reset continue to use Supabase Auth email settings.
+7. Configure the Resend secrets and `email_outbox` Database Webhook above to deliver participant emails, including the registration-success message queued after payment is verified. Password reset emails continue to use Supabase Auth email settings.

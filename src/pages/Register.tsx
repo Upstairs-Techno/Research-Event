@@ -1,6 +1,6 @@
-import { FormEvent, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Check, Eye, EyeOff, GraduationCap, Mail, ShieldCheck } from 'lucide-react'
+import { FormEvent, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Check, Eye, EyeOff, GraduationCap, ShieldCheck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 type Fields = { name: string; email: string; mobile: string; password: string; confirm: string }
@@ -26,13 +26,14 @@ function validate(f: Fields): Errors {
 }
 
 function friendlyAuthError(message: string) {
-  if (/already registered|already exists|user already/i.test(message)) return 'An account may already exist for this email. Try logging in or request another verification email.'
-  if (/rate limit|email rate/i.test(message)) return 'Too many email requests. Please wait a few minutes and try again.'
+  if (/already registered|already exists|user already/i.test(message)) return 'An account may already exist for this email. Try logging in.'
+  if (/rate limit|email rate/i.test(message)) return 'Too many attempts. Please wait a few minutes and try again.'
   if (/network|fetch/i.test(message)) return 'We could not reach the registration service. Check your connection and try again.'
   return 'We could not create your account right now. Please try again.'
 }
 
 export default function Register() {
+  const nav = useNavigate()
   const [fields, setFields] = useState(initial)
   const [errors, setErrors] = useState<Errors>({})
   const [submitted, setSubmitted] = useState(false)
@@ -40,15 +41,7 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [sent, setSent] = useState(false)
   const [notice, setNotice] = useState('')
-  const [cooldown, setCooldown] = useState(0)
-
-  useEffect(() => {
-    if (!cooldown) return
-    const timer = window.setTimeout(() => setCooldown((n) => Math.max(0, n - 1)), 1000)
-    return () => window.clearTimeout(timer)
-  }, [cooldown])
 
   const update = (key: keyof Fields, value: string) => {
     const next = { ...fields, [key]: value }
@@ -64,26 +57,19 @@ export default function Register() {
     if (Object.keys(found).length) return
     setBusy(true); setNotice('')
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: fields.email.trim().toLowerCase(), password: fields.password,
-        options: {
-          data: { full_name: fields.name.trim(), mobile: fields.mobile.trim() },
-          emailRedirectTo: `${window.location.origin}/complete-registration`,
-        },
+        options: { data: { full_name: fields.name.trim(), mobile: fields.mobile.trim() } },
       })
       if (error) throw error
-      setSent(true); setCooldown(60)
+      if (!data.session) {
+        setNotice('This Supabase project is still requiring email confirmation. Disable Confirm email in the Supabase Auth settings before accepting registrations.')
+        return
+      }
+      nav('/complete-registration', { replace: true })
     } catch (err) {
       setNotice(friendlyAuthError((err as Error).message))
     } finally { setBusy(false) }
-  }
-  const resend = async () => {
-    if (cooldown || busy) return
-    setBusy(true); setNotice('')
-    const { error } = await supabase.auth.resend({ type: 'signup', email: fields.email.trim().toLowerCase(), options: { emailRedirectTo: `${window.location.origin}/complete-registration` } })
-    setBusy(false)
-    if (error) setNotice(friendlyAuthError(error.message))
-    else { setNotice('If an unverified account exists for this address, a new link is on its way.'); setCooldown(60) }
   }
   const fieldError = (key: keyof Fields) => submitted || touched[key] ? errors[key] : undefined
   const blur = (key: keyof Fields) => { setTouched((v) => ({ ...v, [key]: true })); setErrors(validate(fields)) }
@@ -102,19 +88,8 @@ export default function Register() {
         <span className="mt-2">{label}</span>{i < 2 && <span className="absolute left-[58%] top-[18px] h-px w-[84%] bg-stone-300" />}
       </li>)}
     </ol>
-    {sent ? <div className="mx-auto max-w-xl rounded-2xl border border-stone-200 bg-white p-6 shadow-[0_18px_60px_-35px_rgba(49,36,26,.35)] sm:p-9">
-      <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-full bg-orange-50 text-orange-700"><Mail size={23} /></div>
-      <h2 className="font-serif text-2xl font-bold text-royal-900">Check your inbox</h2>
-      <p className="mt-3 text-sm leading-6 text-stone-600">We sent a verification link to <strong className="break-all text-stone-900">{fields.email}</strong>. Verify your email before continuing to your registration and payment.</p>
-      <div className="mt-6 rounded-xl bg-stone-50 p-4 text-sm text-stone-600"><p className="font-semibold text-stone-800">No email yet?</p><p className="mt-1">Check spam or promotions, then request another link.</p></div>
-      {notice && <p role="status" className="mt-4 text-sm text-royal-800">{notice}</p>}
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-        <button type="button" onClick={resend} disabled={busy || cooldown > 0} className="btn-primary flex-1 disabled:cursor-not-allowed disabled:opacity-60">{busy ? 'Sending…' : cooldown ? `Resend in ${cooldown}s` : 'Resend verification email'}</button>
-        <button type="button" onClick={() => { setSent(false); setNotice(''); setSubmitted(false); setErrors({}) }} className="rounded-lg border border-stone-300 px-4 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-50">Change email</button>
-      </div>
-      <p className="mt-5 text-center text-sm text-stone-600">Already verified? <Link to="/login" className="font-semibold text-orange-700 underline">Log in</Link></p>
-    </div> : <form onSubmit={submit} noValidate className="mx-auto max-w-2xl rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_18px_60px_-35px_rgba(49,36,26,.35)] sm:p-8">
-      <div className="mb-6 flex items-center gap-3 border-b border-stone-100 pb-5"><ShieldCheck className="text-orange-700" size={23} /><div><h2 className="font-serif text-xl font-bold text-royal-900">Create your account</h2><p className="mt-0.5 text-xs text-stone-500">Step 1 of 3 · Account and email verification</p></div></div>
+    <form onSubmit={submit} noValidate className="mx-auto max-w-2xl rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_18px_60px_-35px_rgba(49,36,26,.35)] sm:p-8">
+      <div className="mb-6 flex items-center gap-3 border-b border-stone-100 pb-5"><ShieldCheck className="text-orange-700" size={23} /><div><h2 className="font-serif text-xl font-bold text-royal-900">Create your account</h2><p className="mt-0.5 text-xs text-stone-500">Step 1 of 3 · Account details</p></div></div>
       <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
         <div><label htmlFor="fullName" className="text-sm font-semibold text-stone-800">Full name</label><input id="fullName" autoComplete="name" onBlur={() => blur('name')} className={inputClass('name')} placeholder="As it should appear on your certificate" value={fields.name} onChange={(e) => update('name', e.target.value)} aria-invalid={!!fieldError('name')} aria-describedby={fieldError('name') ? 'name-error' : undefined} />{fieldError('name') && <p id="name-error" className="mt-1 text-xs text-red-700">{fieldError('name')}</p>}</div>
         <div><label htmlFor="email" className="text-sm font-semibold text-stone-800">Email address</label><input id="email" type="email" autoComplete="email" onBlur={() => blur('email')} className={inputClass('email')} placeholder="you@example.com" value={fields.email} onChange={(e) => update('email', e.target.value)} aria-invalid={!!fieldError('email')} aria-describedby={fieldError('email') ? 'email-error' : undefined} />{fieldError('email') && <p id="email-error" className="mt-1 text-xs text-red-700">{fieldError('email')}</p>}</div>
@@ -126,6 +101,6 @@ export default function Register() {
       <button className="btn-primary mt-7 w-full py-3" disabled={busy}>{busy ? 'Creating secure account…' : 'Create account'}</button>
       <p className="mt-4 text-center text-sm text-stone-600">Already registered? <Link to="/login" className="font-semibold text-orange-700 underline">Log in</Link></p>
       <p className="mt-4 text-center text-xs leading-5 text-stone-500">Your password is sent securely to Supabase Auth and is never stored or logged by this form.</p>
-    </form>}
+    </form>
   </section>
 }

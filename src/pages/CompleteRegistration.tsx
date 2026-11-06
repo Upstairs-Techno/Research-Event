@@ -9,7 +9,7 @@ export default function CompleteRegistration() {
   const { user, fullName } = useAuth()
   const nav = useNavigate()
   const [cats, setCats] = useState<Category[]>([])
-  const [f, setF] = useState({ mobile: '', institution: '', qualification: '', country: 'India', state: '', city: '', category_id: '', research_title: '', abstract: '' })
+  const [f, setF] = useState({ mobile: '', institution: '', qualification: '', country: 'India', category_id: '', research_title: '', abstract: '' })
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
@@ -27,7 +27,7 @@ export default function CompleteRegistration() {
     if (!user) return
     setBusy(true); setErr('')
     const { data: part, error: pe } = await supabase.from('participants')
-      .upsert({ user_id: user.id, mobile: f.mobile || String(user.user_metadata.mobile ?? ''), institution: f.institution, qualification: f.qualification, country: f.country, state: f.state, city: f.city }, { onConflict: 'user_id' })
+      .upsert({ user_id: user.id, mobile: f.mobile || String(user.user_metadata.mobile ?? ''), institution: f.institution, qualification: f.qualification, country: f.country }, { onConflict: 'user_id' })
       .select('id').single()
     if (pe || !part) { setErr(pe?.message ?? 'Could not save details'); setBusy(false); return }
     const { error: re } = await supabase.from('registrations').upsert({
@@ -55,10 +55,6 @@ export default function CompleteRegistration() {
             <input id="m" type="tel" required className="input" placeholder="+91 98765 43210" value={f.mobile} onChange={(e) => set('mobile', e.target.value)} /></div>
           <div><label className="label" htmlFor="c">Country</label>
             <input id="c" required autoComplete="country-name" className="input" value={f.country} onChange={(e) => set('country', e.target.value)} /></div>
-          <div><label className="label" htmlFor="state">State / province</label>
-            <input id="state" required autoComplete="address-level1" className="input" value={f.state} onChange={(e) => set('state', e.target.value)} /></div>
-          <div><label className="label" htmlFor="city">City</label>
-            <input id="city" required autoComplete="address-level2" className="input" value={f.city} onChange={(e) => set('city', e.target.value)} /></div>
           <div><label className="label" htmlFor="i">Institution / organization</label>
             <input id="i" required className="input" value={f.institution} onChange={(e) => set('institution', e.target.value)} /></div>
           <div><label className="label" htmlFor="q">Qualification / designation</label>

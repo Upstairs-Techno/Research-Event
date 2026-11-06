@@ -75,6 +75,7 @@ export default function Payment() {
       <div className="mx-auto max-w-lg px-4 py-12">
         <div className="card space-y-3" id="receipt">
           <h1 className="font-serif text-2xl font-bold text-royal-800">Payment receipt</h1>
+          <p className="text-sm text-slate-600">Your registration is successful. A confirmation email will be sent to {user?.email}.</p>
           <dl className="grid grid-cols-2 gap-2 text-sm">
             <dt className="text-slate-500">Paid by</dt><dd>{fullName} ({user?.email})</dd>
             <dt className="text-slate-500">Amount</dt><dd>{rupees(paid.amount_paise)}</dd>

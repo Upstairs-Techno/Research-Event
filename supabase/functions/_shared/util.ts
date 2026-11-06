@@ -12,7 +12,7 @@ export async function getUser(req: Request) {
     global: { headers: { Authorization: auth } },
   })
   const { data, error } = await client.auth.getUser()
-  return error || !data.user?.email_confirmed_at ? null : data.user
+  return error || !data.user ? null : data.user
 }
 
 export async function hmacHex(secret: string, message: string): Promise<string> {
@@ -41,8 +41,20 @@ export async function markPaid(admin: SupabaseClient, orderId: string, paymentId
     .neq('status', 'paid')
     .select('registration_id')
   if (error) throw error
+  let registrationId = updated?.[0]?.registration_id
+  if (!registrationId) {
+    const { data: existing, error: existingError } = await admin.from('payments')
+      .select('registration_id, status').eq('razorpay_order_id', orderId).maybeSingle()
+    if (existingError) throw existingError
+    if (existing?.status === 'paid') registrationId = existing.registration_id
+  }
+  if (!registrationId) return false
+
+  const { error: registrationError } = await admin.from('registrations')
+    .update({ status: 'paid' }).eq('id', registrationId)
+  if (registrationError) throw registrationError
+
   if (updated && updated.length > 0) {
-    await admin.from('registrations').update({ status: 'paid' }).eq('id', updated[0].registration_id)
     await admin.from('audit_logs').insert({
       action: 'payment.verified', entity: 'payments', entity_id: orderId, details: { paymentId },
     })

@@ -9,14 +9,13 @@ interface Ctx {
   role: Role | null
   accountActive: boolean | null
   fullName: string
-  emailVerified: boolean
   loading: boolean
   roleLoading: boolean
   signOut: () => Promise<void>
 }
 
 const AuthContext = createContext<Ctx>({
-  session: null, user: null, role: null, accountActive: null, fullName: '', emailVerified: false, loading: true, roleLoading: true, signOut: async () => {},
+  session: null, user: null, role: null, accountActive: null, fullName: '', loading: true, roleLoading: true, signOut: async () => {},
 })
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -91,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         session, user: session?.user ?? null, role, accountActive, fullName,
-        emailVerified: Boolean(session?.user.email_confirmed_at), loading, roleLoading,
+        loading, roleLoading,
         signOut: async () => { await supabase.auth.signOut() },
       }}
     >
