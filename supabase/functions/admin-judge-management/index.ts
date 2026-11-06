@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { corsHeaders, json } from '../_shared/cors.ts'
+import { corsPreflight, json } from '../_shared/cors.ts'
 import { getUser, serviceClient } from '../_shared/util.ts'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -18,19 +18,20 @@ async function writeAudit(admin: ReturnType<typeof serviceClient>, actor: string
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: { ...corsHeaders, 'Access-Control-Allow-Methods': 'POST, OPTIONS' } })
-  if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
+  const respond = (body: unknown, status = 200) => json(body, status, req)
+  if (req.method === 'OPTIONS') return corsPreflight(req)
+  if (req.method !== 'POST') return respond({ error: 'Method not allowed' }, 405)
 
   const caller = await getUser(req)
-  if (!caller) return json({ error: 'Authentication required' }, 401)
+  if (!caller) return respond({ error: 'Authentication required' }, 401)
 
   const admin = serviceClient()
   const { data: callerProfile, error: profileError } = await admin
     .from('profiles').select('role').eq('id', caller.id).maybeSingle()
-  if (profileError || callerProfile?.role !== 'admin') return json({ error: 'Administrator access required' }, 403)
+  if (profileError || callerProfile?.role !== 'admin') return respond({ error: 'Administrator access required' }, 403)
 
   let input: Record<string, unknown>
-  try { input = await req.json() } catch { return json({ error: 'Invalid request body' }, 400) }
+  try { input = await req.json() } catch { return respond({ error: 'Invalid request body' }, 400) }
   const action = input.action
 
   try {
@@ -38,7 +39,7 @@ Deno.serve(async (req: Request) => {
       const { data: judges, error } = await admin.from('judges').select('user_id, created_at').order('created_at', { ascending: false })
       if (error) throw error
       const ids = (judges ?? []).map((j) => j.user_id)
-      if (!ids.length) return json({ judges: [] })
+      if (!ids.length) return respond({ judges: [] })
 
       const [{ data: profiles, error: profilesError }, { data: assignments, error: assignmentsError }, { data: evaluations, error: evaluationsError }] = await Promise.all([
         admin.from('profiles').select('id, full_name, email, role, account_active, created_at').in('id', ids),
@@ -78,22 +79,22 @@ Deno.serve(async (req: Request) => {
           pending_evaluations: pendingCount,
         }
       }))
-      return json({ judges: rows })
+      return respond({ judges: rows })
     }
 
     if (action === 'create') {
       const fullName = String(input.fullName ?? '').trim()
       const email = String(input.email ?? '').trim().toLowerCase()
       const password = input.password
-      if (!fullName || !email || !password) return json({ error: 'Full name, email, and password are required' }, 400)
-      if (fullName.length > 120 || email.length > 254) return json({ error: 'Name or email address is too long' }, 400)
-      if (!EMAIL_RE.test(email)) return json({ error: 'Enter a valid email address' }, 400)
-      if (!validPassword(password)) return json({ error: 'Password must be 12+ characters and include uppercase, lowercase, number, and symbol' }, 400)
+      if (!fullName || !email || !password) return respond({ error: 'Full name, email, and password are required' }, 400)
+      if (fullName.length > 120 || email.length > 254) return respond({ error: 'Name or email address is too long' }, 400)
+      if (!EMAIL_RE.test(email)) return respond({ error: 'Enter a valid email address' }, 400)
+      if (!validPassword(password)) return respond({ error: 'Password must be 12+ characters and include uppercase, lowercase, number, and symbol' }, 400)
 
       const { data: created, error: createError } = await admin.auth.admin.createUser({
         email, password, email_confirm: true, user_metadata: { full_name: fullName },
       })
-      if (createError || !created.user) return json({ error: createError?.message ?? 'Could not create authentication account' }, 409)
+      if (createError || !created.user) return respond({ error: createError?.message ?? 'Could not create authentication account' }, 409)
 
       const userId = created.user.id
       const { error: profileUpsertError } = await admin.from('profiles').upsert({
@@ -114,35 +115,35 @@ Deno.serve(async (req: Request) => {
         await admin.auth.admin.deleteUser(userId)
         throw auditError
       }
-      return json({ success: true, user_id: userId })
+      return respond({ success: true, user_id: userId })
     }
 
     const userId = String(input.userId ?? '')
-    if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(userId)) return json({ error: 'A valid judge account ID is required' }, 400)
+    if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(userId)) return respond({ error: 'A valid judge account ID is required' }, 400)
     const { data: profile, error: judgeError } = await admin.from('profiles')
       .select('id, email, full_name, role, account_active').eq('id', userId).maybeSingle()
     if (judgeError) throw judgeError
-    if (!profile || profile.role !== 'judge') return json({ error: 'Judge account not found' }, 404)
+    if (!profile || profile.role !== 'judge') return respond({ error: 'Judge account not found' }, 404)
     const { data: judgeRow, error: judgeRowError } = await admin.from('judges').select('user_id').eq('user_id', userId).maybeSingle()
     if (judgeRowError) throw judgeRowError
-    if (!judgeRow) return json({ error: 'Judge account not found' }, 404)
+    if (!judgeRow) return respond({ error: 'Judge account not found' }, 404)
 
     if (action === 'update') {
       const fullName = String(input.fullName ?? '').trim()
       const email = String(input.email ?? '').trim().toLowerCase()
-      if (!fullName || !email) return json({ error: 'Full name and email are required' }, 400)
-      if (fullName.length > 120 || email.length > 254) return json({ error: 'Name or email address is too long' }, 400)
-      if (!EMAIL_RE.test(email)) return json({ error: 'Enter a valid email address' }, 400)
+      if (!fullName || !email) return respond({ error: 'Full name and email are required' }, 400)
+      if (fullName.length > 120 || email.length > 254) return respond({ error: 'Name or email address is too long' }, 400)
+      if (!EMAIL_RE.test(email)) return respond({ error: 'Enter a valid email address' }, 400)
       const { data: authUser, error: getAuthError } = await admin.auth.admin.getUserById(userId)
       if (getAuthError) throw getAuthError
       const { error: authUpdateError } = await admin.auth.admin.updateUserById(userId, {
         email, email_confirm: true, user_metadata: { ...authUser.user.user_metadata, full_name: fullName },
       })
-      if (authUpdateError) return json({ error: authUpdateError.message }, 409)
+      if (authUpdateError) return respond({ error: authUpdateError.message }, 409)
       const accountActive = typeof input.accountActive === 'boolean' ? input.accountActive : profile.account_active
       if (accountActive && !profile.account_active) {
         const { error: unbanError } = await admin.auth.admin.updateUserById(userId, { ban_duration: 'none' })
-        if (unbanError) return json({ error: unbanError.message }, 500)
+        if (unbanError) return respond({ error: unbanError.message }, 500)
       }
       const { error: updateError } = await admin.from('profiles').update({ email, full_name: fullName, account_active: accountActive }).eq('id', userId)
       if (updateError) {
@@ -153,18 +154,18 @@ Deno.serve(async (req: Request) => {
         const { error: banError } = await admin.auth.admin.updateUserById(userId, { ban_duration: BAN_DURATION })
         if (banError) {
           await writeAudit(admin, caller.id, 'judge.deactivated', userId, { email, auth_ban_failed: true })
-          return json({ error: `Database access is disabled, but Auth could not complete the sign-in ban: ${banError.message}` }, 500)
+          return respond({ error: `Database access is disabled, but Auth could not complete the sign-in ban: ${banError.message}` }, 500)
         }
       }
       await writeAudit(admin, caller.id, 'judge.updated', userId, {
         email_changed: profile.email !== email, full_name_changed: profile.full_name !== fullName,
         status_changed: profile.account_active !== accountActive, account_active: accountActive,
       })
-      return json({ success: true })
+      return respond({ success: true })
     }
 
     if (action === 'set_status') {
-      if (typeof input.active !== 'boolean') return json({ error: 'Account status is required' }, 400)
+      if (typeof input.active !== 'boolean') return respond({ error: 'Account status is required' }, 400)
       if (input.active) {
         const { error: unbanError } = await admin.auth.admin.updateUserById(userId, { ban_duration: 'none' })
         if (unbanError) throw unbanError
@@ -175,19 +176,19 @@ Deno.serve(async (req: Request) => {
         const { error: banError } = await admin.auth.admin.updateUserById(userId, { ban_duration: BAN_DURATION })
         if (banError) {
           await writeAudit(admin, caller.id, 'judge.deactivated', userId, { email: profile.email, auth_ban_failed: true })
-          return json({ error: `Database access is disabled, but Auth could not complete the sign-in ban: ${banError.message}` }, 500)
+          return respond({ error: `Database access is disabled, but Auth could not complete the sign-in ban: ${banError.message}` }, 500)
         }
       }
       await writeAudit(admin, caller.id, input.active ? 'judge.activated' : 'judge.deactivated', userId, { email: profile.email })
-      return json({ success: true, account_active: input.active })
+      return respond({ success: true, account_active: input.active })
     }
 
     if (action === 'reset_password') {
-      if (!validPassword(input.password)) return json({ error: 'Password must be 12+ characters and include uppercase, lowercase, number, and symbol' }, 400)
+      if (!validPassword(input.password)) return respond({ error: 'Password must be 12+ characters and include uppercase, lowercase, number, and symbol' }, 400)
       const { error: passwordError } = await admin.auth.admin.updateUserById(userId, { password: input.password })
-      if (passwordError) return json({ error: passwordError.message }, 400)
+      if (passwordError) return respond({ error: passwordError.message }, 400)
       await writeAudit(admin, caller.id, 'judge.password_reset', userId)
-      return json({ success: true })
+      return respond({ success: true })
     }
 
     if (action === 'delete') {
@@ -204,17 +205,17 @@ Deno.serve(async (req: Request) => {
       const referenceError = references.find((result) => result.error)?.error
       if (referenceError) throw referenceError
       if (references.some((result) => (result.count ?? 0) > 0)) {
-        return json({ error: 'This account has linked assignments, evaluations, or participant records. Deactivate it to preserve all history.' }, 409)
+        return respond({ error: 'This account has linked assignments, evaluations, or participant records. Deactivate it to preserve all history.' }, 409)
       }
       const { error: deleteError } = await admin.auth.admin.deleteUser(userId)
       if (deleteError) throw deleteError
       await writeAudit(admin, caller.id, 'judge.deleted', userId, { email: profile.email })
-      return json({ success: true })
+      return respond({ success: true })
     }
 
-    return json({ error: 'Unsupported action' }, 400)
+    return respond({ error: 'Unsupported action' }, 400)
   } catch (error) {
     console.error('admin-judge-management failed')
-    return json({ error: 'Judge management operation failed. Check the audit log or server logs.' }, 500)
+    return respond({ error: 'Judge management operation failed. Check the audit log or server logs.' }, 500)
   }
 })

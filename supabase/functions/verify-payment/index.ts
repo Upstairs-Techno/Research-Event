@@ -1,9 +1,10 @@
 // Verifies the Razorpay checkout signature on the server, then marks the registration paid.
-import { corsHeaders, json } from '../_shared/cors.ts'
+import { corsPreflight, json as jsonResponse } from '../_shared/cors.ts'
 import { getUser, hmacHex, markPaid, safeEqual, serviceClient } from '../_shared/util.ts'
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  const json = (body: unknown, status = 200) => jsonResponse(body, status, req)
+  if (req.method === 'OPTIONS') return corsPreflight(req)
   try {
     const user = await getUser(req)
     if (!user) return json({ error: 'Unauthorized' }, 401)

@@ -6,7 +6,7 @@
 //                           Originality.ai, GPTZero, etc.).
 //
 // Results are ADVISORY. High scores only set submissions.flagged = true for manual review.
-import { corsHeaders, json } from '../_shared/cors.ts'
+import { corsPreflight, json as jsonResponse } from '../_shared/cors.ts'
 import { getUser, serviceClient } from '../_shared/util.ts'
 
 // deno-lint-ignore no-explicit-any
@@ -93,7 +93,8 @@ async function callAi(full: string) {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  const json = (body: unknown, status = 200) => jsonResponse(body, status, req)
+  if (req.method === 'OPTIONS') return corsPreflight(req)
   try {
     const user = await getUser(req)
     if (!user) return json({ error: 'Unauthorized' }, 401)

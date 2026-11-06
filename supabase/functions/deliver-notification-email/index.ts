@@ -1,7 +1,7 @@
 // Database Webhook handler for durable participant email notifications.
 // Configure an INSERT webhook on public.email_outbox and set EMAIL_WEBHOOK_SECRET,
 // RESEND_API_KEY, and RESEND_FROM_EMAIL as Supabase secrets.
-import { json } from '../_shared/cors.ts'
+import { corsPreflight, json as jsonResponse } from '../_shared/cors.ts'
 import { serviceClient, safeEqual } from '../_shared/util.ts'
 
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (c) => ({
@@ -9,6 +9,8 @@ const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (c) => ({
 }[c]!))
 
 Deno.serve(async (req) => {
+  const json = (body: unknown, status = 200) => jsonResponse(body, status, req)
+  if (req.method === 'OPTIONS') return corsPreflight(req)
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
   const expected = Deno.env.get('EMAIL_WEBHOOK_SECRET')
   const provided = req.headers.get('x-webhook-secret') ?? ''
