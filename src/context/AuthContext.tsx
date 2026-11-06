@@ -66,13 +66,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccountActive(null)
     setRoleLoading(true)
     setLoading(true)
-    supabase.functions.invoke('account-context').then(({ data, error }) => {
+    supabase.functions.invoke('account-context').then(async ({ data, error }) => {
         if (!active) return
+        let account = data
+        if (error || !account) {
+          // Keep admin/participant login working before account-context is
+          // deployed. This query uses columns available in the base schema.
+          const fallback = await supabase.from('profiles').select('role, full_name').eq('id', uid).maybeSingle()
+          if (fallback.error || !fallback.data) throw fallback.error ?? new Error('Account profile unavailable')
+          account = { ...fallback.data, account_active: fallback.data.role === 'judge' ? false : true }
+        }
         const validRoles: Role[] = ['participant', 'judge', 'admin']
-        const resolvedRole = !error && data && validRoles.includes(data.role as Role) ? data.role as Role : null
+        const resolvedRole = validRoles.includes(account.role as Role) ? account.role as Role : null
         setRole(resolvedRole)
-        setAccountActive(resolvedRole === 'judge' && typeof data?.account_active === 'boolean' ? data.account_active : resolvedRole === 'judge' ? null : true)
-        setFullName(!error && data ? data.full_name ?? '' : '')
+        setAccountActive(resolvedRole === 'judge' && typeof account.account_active === 'boolean' ? account.account_active : resolvedRole === 'judge' ? null : true)
+        setFullName(account.full_name ?? '')
         setRoleLoading(false)
         setLoading(false)
       }).catch(() => {
