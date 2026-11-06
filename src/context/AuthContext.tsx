@@ -66,16 +66,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccountActive(null)
     setRoleLoading(true)
     setLoading(true)
-    supabase.from('profiles').select('role, full_name, account_active').eq('id', uid).maybeSingle()
-      .then(({ data, error }) => {
+    supabase.functions.invoke('account-context').then(({ data, error }) => {
         if (!active) return
         const validRoles: Role[] = ['participant', 'judge', 'admin']
-        setRole(!error && data && validRoles.includes(data.role as Role) ? data.role as Role : null)
-        setAccountActive(!error && data && typeof data.account_active === 'boolean' ? data.account_active : null)
+        const resolvedRole = !error && data && validRoles.includes(data.role as Role) ? data.role as Role : null
+        setRole(resolvedRole)
+        setAccountActive(resolvedRole === 'judge' && typeof data?.account_active === 'boolean' ? data.account_active : resolvedRole === 'judge' ? null : true)
         setFullName(!error && data ? data.full_name ?? '' : '')
         setRoleLoading(false)
         setLoading(false)
-      }, () => {
+      }).catch(() => {
         if (!active) return
         setRole(null)
         setAccountActive(null)

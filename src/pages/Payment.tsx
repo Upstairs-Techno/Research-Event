@@ -54,7 +54,7 @@ export default function Payment() {
         handler: async (resp: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
           const { data, error: ve } = await supabase.functions.invoke('verify-payment', { body: resp })
           if (ve || data?.error) setMsg(data?.error ?? ve?.message ?? 'Verification failed')
-          else setMsg('Payment verified!')
+          else setMsg('Payment verified and registration confirmed. Your confirmation email is being queued.')
           await load()
           setBusy(false)
         },
@@ -70,19 +70,19 @@ export default function Payment() {
   if (!settings || !status) return <p className="p-10 text-center text-slate-500">Loading…</p>
   const paid = payments.find((p) => p.status === 'paid')
 
-  if (status === 'paid' && paid) {
+  if ((status === 'paid' || status === 'confirmed') && paid) {
     return (
       <div className="mx-auto max-w-lg px-4 py-12">
         <div className="card space-y-3" id="receipt">
           <h1 className="font-serif text-2xl font-bold text-royal-800">Payment receipt</h1>
-          <p className="text-sm text-slate-600">Your registration is successful. A confirmation email will be sent to {user?.email}.</p>
+          <p className="text-sm text-slate-600">Your registration is confirmed. A confirmation email is being processed for {user?.email}.</p>
           <dl className="grid grid-cols-2 gap-2 text-sm">
             <dt className="text-slate-500">Paid by</dt><dd>{fullName} ({user?.email})</dd>
             <dt className="text-slate-500">Amount</dt><dd>{rupees(paid.amount_paise)}</dd>
             <dt className="text-slate-500">Order ID</dt><dd className="break-all">{paid.razorpay_order_id}</dd>
             <dt className="text-slate-500">Payment ID</dt><dd className="break-all">{paid.razorpay_payment_id}</dd>
             <dt className="text-slate-500">Date</dt><dd>{fmtDate(paid.paid_at)}</dd>
-            <dt className="text-slate-500">Status</dt><dd className="font-semibold text-green-700">Paid</dd>
+            <dt className="text-slate-500">Registration</dt><dd className="font-semibold text-green-700">Confirmed</dd>
           </dl>
           <div className="no-print flex gap-2">
             <button className="btn-outline" onClick={() => window.print()}>Print / save PDF</button>

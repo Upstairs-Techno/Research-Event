@@ -79,7 +79,7 @@ export default function EditorPage() {
         .maybeSingle()
 
       if (!registration) return nav('/complete-registration', { replace: true })
-      if (registration.status !== 'paid') return nav('/payment', { replace: true })
+      if (registration.status !== 'paid' && registration.status !== 'confirmed') return nav('/payment', { replace: true })
       setReg(registration)
 
       let { data: s } = await supabase

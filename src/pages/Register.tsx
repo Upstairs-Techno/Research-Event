@@ -63,7 +63,7 @@ export default function Register() {
       })
       if (error) throw error
       if (!data.session) {
-        setNotice('This Supabase project is still requiring email confirmation. Disable Confirm email in the Supabase Auth settings before accepting registrations.')
+        setNotice('Your account was created, but automatic sign-in did not complete. Please log in to continue or contact support.')
         return
       }
       nav('/complete-registration', { replace: true })

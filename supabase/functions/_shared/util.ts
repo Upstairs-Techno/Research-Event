@@ -51,7 +51,7 @@ export async function markPaid(admin: SupabaseClient, orderId: string, paymentId
   if (!registrationId) return false
 
   const { error: registrationError } = await admin.from('registrations')
-    .update({ status: 'paid' }).eq('id', registrationId)
+    .update({ status: 'confirmed' }).eq('id', registrationId)
   if (registrationError) throw registrationError
 
   if (updated && updated.length > 0) {

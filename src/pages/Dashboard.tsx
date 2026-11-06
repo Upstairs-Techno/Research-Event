@@ -128,7 +128,7 @@ export default function Dashboard() {
     )
   }
 
-  const paid = reg.status === 'paid'
+  const paid = reg.status === 'paid' || reg.status === 'confirmed'
   const submitted = !!sub?.locked
   const published = !!settings?.results_published
 

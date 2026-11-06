@@ -394,6 +394,7 @@ function RegistrationsTab({ showMsg }: { showMsg: (m: string, t?: any) => void }
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('all')
   const [loading, setLoading] = useState(true)
+  const [resending, setResending] = useState<string | null>(null)
 
   useEffect(() => {
     supabase
@@ -405,6 +406,15 @@ function RegistrationsTab({ showMsg }: { showMsg: (m: string, t?: any) => void }
         setLoading(false)
       })
   }, [])
+
+  const resendConfirmation = async (registrationId: string) => {
+    if (!window.confirm('Send a new registration confirmation email to this participant?')) return
+    setResending(registrationId)
+    const { error } = await supabase.rpc('admin_resend_registration_confirmation', { p_registration: registrationId })
+    setResending(null)
+    if (error) { showMsg(`Could not queue the confirmation email: ${error.message}`, 'error'); return }
+    showMsg('A new confirmation email has been queued. Check Email Delivery in the audit section for its status.')
+  }
 
   const flat = rows.map((r) => {
     const s = r.submissions?.[0]
@@ -485,12 +495,13 @@ function RegistrationsTab({ showMsg }: { showMsg: (m: string, t?: any) => void }
                 <th className="px-4 py-3">Payment</th>
                 <th className="px-4 py-3">Submission</th>
                 <th className="px-4 py-3">Registered</th>
+                <th className="px-4 py-3">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
                     No matching participants found.
                   </td>
                 </tr>
@@ -514,9 +525,9 @@ function RegistrationsTab({ showMsg }: { showMsg: (m: string, t?: any) => void }
                         {r.research_categories?.name}
                       </td>
                       <td className="px-4 py-3">
-                        {r.status === 'paid' ? (
+                        {r.status === 'paid' || r.status === 'confirmed' ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                            Paid
+                            {r.status === 'confirmed' ? 'Confirmed' : 'Paid'}
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
@@ -539,6 +550,9 @@ function RegistrationsTab({ showMsg }: { showMsg: (m: string, t?: any) => void }
                       </td>
                       <td className="px-4 py-3 text-slate-400 font-mono text-[11px]">
                         {fmtDate(r.created_at)}
+                      </td>
+                      <td className="px-4 py-3">
+                        {(r.status === 'paid' || r.status === 'confirmed') && <button disabled={resending === r.id} onClick={() => resendConfirmation(r.id)} className="btn-outline !py-1.5 !px-2 !text-[10px] disabled:opacity-50">{resending === r.id ? 'Queuing…' : 'Resend confirmation'}</button>}
                       </td>
                     </tr>
                   )
@@ -1316,7 +1330,7 @@ function JudgesTab({ showMsg }: { showMsg: (m: string, t?: any) => void }) {
   }
 
   const visible = judges.filter((judge) => {
-    const match = `${judge.full_name} ${judge.email}`.toLowerCase().includes(query.trim().toLowerCase())
+    const match = `${judge.full_name} ${judge.email} ${judge.id}`.toLowerCase().includes(query.trim().toLowerCase())
     return match && (statusFilter === 'all' || (statusFilter === 'active') === judge.account_active)
   })
 
@@ -1346,7 +1360,7 @@ function JudgesTab({ showMsg }: { showMsg: (m: string, t?: any) => void }) {
     </div>
 
     <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row">
-      <div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input className="input pl-9" placeholder="Search judges by name or email" value={query} onChange={(e) => setQuery(e.target.value)} /></div>
+      <div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input className="input pl-9" placeholder="Search judges by name, email, or ID" value={query} onChange={(e) => setQuery(e.target.value)} /></div>
       <select className="input sm:w-44" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}><option value="all">All accounts</option><option value="active">Active</option><option value="inactive">Inactive</option></select>
       <button onClick={load} className="btn-outline !py-2 !text-xs"><RefreshCw className="h-3.5 w-3.5" /> Refresh</button>
     </div>
@@ -1581,6 +1595,7 @@ function SettingsTab({ showMsg }: { showMsg: (m: string, t?: any) => void }) {
    ───────────────────────────────────────────────────────────────────────────── */
 function AuditTrailTab() {
   const [rows, setRows] = useState<any[]>([])
+  const [emails, setEmails] = useState<any[]>([])
 
   useEffect(() => {
     supabase
@@ -1589,11 +1604,28 @@ function AuditTrailTab() {
       .order('created_at', { ascending: false })
       .limit(200)
       .then(({ data }) => setRows(data ?? []))
+    supabase.from('email_outbox')
+      .select('id,status,attempts,last_error,sent_at,created_at,participant_notifications(title,kind,profiles(email))')
+      .order('created_at', { ascending: false })
+      .limit(100)
+      .then(({ data }) => setEmails(data ?? []))
   }, [])
 
   return (
     <div className="space-y-4">
       <h2 className="font-serif text-lg font-bold text-royal-950">System Audit Trail</h2>
+      <section className="overflow-hidden rounded-2xl bg-white shadow-sm border border-slate-200">
+        <div className="border-b border-slate-200 p-4"><h3 className="font-semibold text-royal-900">Email Delivery</h3><p className="mt-1 text-[11px] text-slate-500">Latest outbox deliveries, including registration confirmations.</p></div>
+        <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs">
+          <thead className="bg-royal-50 text-royal-900 border-b border-slate-200 font-semibold uppercase tracking-wider text-[10px]"><tr><th className="px-4 py-3">Created</th><th className="px-4 py-3">Recipient</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Attempts</th><th className="px-4 py-3">Last error</th><th className="px-4 py-3">Sent</th></tr></thead>
+          <tbody className="divide-y divide-slate-100">{emails.map((email) => <tr key={email.id}>
+            <td className="px-4 py-3 whitespace-nowrap text-slate-500">{fmtDate(email.created_at)}</td>
+            <td className="px-4 py-3"><div className="font-medium">{email.participant_notifications?.title ?? 'Notification'}</div><span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${email.status === 'sent' ? 'bg-emerald-100 text-emerald-800' : email.status === 'failed' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>{email.status}</span></td>
+            <td className="px-4 py-3 text-slate-600">{email.participant_notifications?.profiles?.email ?? '—'}</td>
+            <td className="px-4 py-3">{email.attempts}</td><td className="max-w-xs truncate px-4 py-3 text-red-700" title={email.last_error ?? ''}>{email.last_error || '—'}</td><td className="px-4 py-3 whitespace-nowrap">{fmtDate(email.sent_at)}</td>
+          </tr>)}{emails.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-slate-500">No email deliveries recorded.</td></tr>}</tbody>
+        </table></div>
+      </section>
       <div className="overflow-hidden rounded-2xl bg-white shadow-sm border border-slate-200">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">

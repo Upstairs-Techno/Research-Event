@@ -12,7 +12,7 @@ Deno.serve(async (req) => {
     const { data: reg } = await admin
       .from('registrations').select('id, status').eq('user_id', user.id).maybeSingle()
     if (!reg) return json({ error: 'Complete your registration first' }, 400)
-    if (reg.status === 'paid') return json({ error: 'Registration already paid' }, 409)
+    if (reg.status === 'paid' || reg.status === 'confirmed') return json({ error: 'Registration already paid' }, 409)
 
     const { data: settings } = await admin
       .from('competition_settings').select('fee_paise, registration_open').eq('id', 1).single()

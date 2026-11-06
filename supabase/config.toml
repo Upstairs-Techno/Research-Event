@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.admin-judge-management]
 verify_jwt = true
+
+[functions.account-context]
+verify_jwt = true
