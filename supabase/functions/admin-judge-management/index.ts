@@ -95,26 +95,37 @@ Deno.serve(async (req: Request) => {
       const { data: created, error: createError } = await admin.auth.admin.createUser({
         email, password, email_confirm: true, user_metadata: { full_name: fullName },
       })
-      if (createError || !created.user) return respond({ error: createError?.message ?? 'Could not create authentication account' }, 409)
+      if (createError || !created.user) {
+        const message = createError?.message ?? 'Could not create authentication account'
+        const alreadyExists = /already been registered|already exists|user already registered/i.test(message)
+        return respond({
+          error: alreadyExists
+            ? 'An account with this email already exists. Use “Promote to Judge” in Judge Management to grant judge access to that registered account.'
+            : message,
+          code: alreadyExists ? 'USER_ALREADY_EXISTS' : undefined,
+          suggestion: alreadyExists ? 'promote_existing_user' : undefined,
+        }, alreadyExists ? 409 : 400)
+      }
 
       const userId = created.user.id
       const { error: profileUpsertError } = await admin.from('profiles').upsert({
         id: userId, email, full_name: fullName, role: 'judge', account_active: true,
       }, { onConflict: 'id' })
       if (profileUpsertError) {
-        await admin.auth.admin.deleteUser(userId)
-        throw profileUpsertError
+        const { error: rollbackError } = await admin.auth.admin.deleteUser(userId)
+        throw new Error(`Profile creation failed: ${profileUpsertError.message}${rollbackError ? `; auth-user rollback failed: ${rollbackError.message}` : ''}`)
       }
       const { error: judgeUpsertError } = await admin.from('judges').upsert({ user_id: userId }, { onConflict: 'user_id' })
       if (judgeUpsertError) {
-        await admin.auth.admin.deleteUser(userId)
-        throw judgeUpsertError
+        const { error: rollbackError } = await admin.auth.admin.deleteUser(userId)
+        throw new Error(`Judge record creation failed: ${judgeUpsertError.message}${rollbackError ? `; auth-user rollback failed: ${rollbackError.message}` : ''}`)
       }
       try {
         await writeAudit(admin, caller.id, 'judge.created', userId, { email, full_name: fullName })
       } catch (auditError) {
-        await admin.auth.admin.deleteUser(userId)
-        throw auditError
+        const { error: rollbackError } = await admin.auth.admin.deleteUser(userId)
+        const message = auditError instanceof Error ? auditError.message : String(auditError)
+        throw new Error(`Audit log creation failed: ${message}${rollbackError ? `; auth-user rollback failed: ${rollbackError.message}` : ''}`)
       }
       return respond({ success: true, user_id: userId })
     }
@@ -216,11 +227,13 @@ Deno.serve(async (req: Request) => {
 
     return respond({ error: 'Unsupported action' }, 400)
   } catch (error) {
-    console.error('admin-judge-management operation failed:', error)
-    return respond({ error: 'Judge management operation failed. Check the audit log or server logs.' }, 500)
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('admin-judge-management operation failed:', message, error)
+    return respond({ error: `Judge management operation failed: ${message}` }, 500)
   }
   } catch (error) {
-    console.error('admin-judge-management request failed:', error)
-    return respond({ error: 'Judge management request failed unexpectedly.' }, 500)
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('admin-judge-management request failed:', message, error)
+    return respond({ error: `Judge management request failed: ${message}` }, 500)
   }
 })
