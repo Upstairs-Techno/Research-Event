@@ -20,6 +20,7 @@ async function writeAudit(admin: ReturnType<typeof serviceClient>, actor: string
 Deno.serve(async (req: Request) => {
   const respond = (body: unknown, status = 200) => json(body, status, req)
   if (req.method === 'OPTIONS') return corsPreflight(req)
+  try {
   if (req.method !== 'POST') return respond({ error: 'Method not allowed' }, 405)
 
   const caller = await getUser(req)
@@ -215,7 +216,11 @@ Deno.serve(async (req: Request) => {
 
     return respond({ error: 'Unsupported action' }, 400)
   } catch (error) {
-    console.error('admin-judge-management failed')
+    console.error('admin-judge-management operation failed:', error)
     return respond({ error: 'Judge management operation failed. Check the audit log or server logs.' }, 500)
+  }
+  } catch (error) {
+    console.error('admin-judge-management request failed:', error)
+    return respond({ error: 'Judge management request failed unexpectedly.' }, 500)
   }
 })

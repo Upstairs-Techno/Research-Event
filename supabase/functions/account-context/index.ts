@@ -3,6 +3,7 @@ import { getUser, serviceClient } from '../_shared/util.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return corsPreflight(req)
+  try {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405, req)
 
   const user = await getUser(req)
@@ -28,4 +29,8 @@ Deno.serve(async (req) => {
     full_name: profile.full_name ?? '',
     account_active: accountActive,
   }, 200, req)
+  } catch (error) {
+    console.error('account-context request failed:', error)
+    return json({ error: 'Account context request failed unexpectedly.' }, 500, req)
+  }
 })
