@@ -1144,7 +1144,7 @@ function ResultsManagementTab({ showMsg }: { showMsg: (m: string, t?: any) => vo
         </div>
 
         <p className="text-xs text-slate-600 leading-relaxed max-w-2xl">
-          Publishing ranks the top 3 research papers by the average of approved juror evaluations (Cash awards: 1st: ₹15,000 · 2nd: ₹10,000 · 3rd: ₹5,000). Ensure all scores are approved in the Submissions tab before publishing.
+          Publishing ranks the top 3 research papers by the average of approved juror evaluations (Cash prizes: 1st: ₹9,999 · 2nd: ₹7,777 · 3rd: ₹4,444). Ensure all scores are approved in the Submissions tab before publishing.
         </p>
 
         <div className="flex flex-wrap gap-3 pt-2 border-t border-slate-100">

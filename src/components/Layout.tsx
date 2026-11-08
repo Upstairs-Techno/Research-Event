@@ -4,10 +4,10 @@ export default function Layout() {
   return (
     <div className="flex min-h-screen flex-col bg-slate-50/50">
       <header className="portal-header no-print sticky top-0 z-50 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 py-3">
+        <div className="portal-header-inner mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 py-3">
           {/* Brand */}
-          <Link to="/" className="flex items-center gap-3 group">
-              <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 p-1 border border-gold-500/40 shadow-sm group-hover:scale-105 transition-transform">
+          <Link to="/" className="portal-header-brand flex min-w-0 items-center gap-3 group">
+              <div className="portal-logo relative flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 p-1 border border-gold-500/40 shadow-sm group-hover:scale-105 transition-transform">
               <img
                 className="h-full w-full object-cover rounded-lg"
                 src="/favicon/android-chrome-192x192.png"
@@ -24,7 +24,7 @@ export default function Layout() {
             </div>
           </Link>
 
-          <nav aria-label="Account" className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <nav aria-label="Account" className="portal-account-nav flex shrink-0 items-center gap-2 sm:gap-3">
             <Link to="/login" className="inline-flex items-center justify-center rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-xs font-bold uppercase tracking-wider text-stone-800 hover:border-gold-500 hover:bg-orange-50 sm:px-4">
               Log In
             </Link>

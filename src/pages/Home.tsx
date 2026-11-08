@@ -1,10 +1,17 @@
 import { Link } from 'react-router-dom'
+import { Award, BadgeCheck, Frame, Megaphone, Trophy } from 'lucide-react'
 import { fmtDate, rupees, useSettings } from '../lib/utils'
 
 const awards = [
-  { place: 'First Prize', amount: '₹15,000', rank: '01', tone: 'first' },
-  { place: 'Second Prize', amount: '₹10,000', rank: '02', tone: 'second' },
-  { place: 'Third Prize', amount: '₹5,000', rank: '03', tone: 'third' },
+  { place: '1st Prize', amount: '₹9,999', rank: '🥇', tone: 'first' },
+  { place: '2nd Prize', amount: '₹7,777', rank: '🥈', tone: 'second' },
+  { place: '3rd Prize', amount: '₹4,444', rank: '🥉', tone: 'third' },
+]
+
+const rewards = [
+  { title: 'Media Recognition', description: "Recognition and coverage through the organization's official media and social media platforms.", Icon: Megaphone },
+  { title: 'Digital Certificate', description: 'An official digital certificate of achievement.', Icon: BadgeCheck },
+  { title: 'Physical Framed Certificate', description: 'A professionally printed and framed certificate presented to the winners.', Icon: Frame },
 ]
 
 export default function Home() {
@@ -60,9 +67,11 @@ export default function Home() {
       </section>
 
       <section className="awards-section section-wrap" id="awards">
-        <div className="awards-heading"><div><div className="section-kicker">MERIT RECOGNIZED <span>03</span></div><h2>Excellence,<br/><em>rewarded.</em></h2></div><p>Outstanding work deserves a distinction. Three awards recognize the research that rises to the occasion.</p></div>
-        <div className="podium-grid">{awards.map((a) => <article className={`prize-card ${a.tone}`} key={a.place}><span className="prize-rank">{a.rank}</span><div className="laurel">✦</div><p>{a.place}</p><h3>{a.amount}</h3><span className="prize-label">RESEARCH DISTINCTION</span></article>)}</div>
-        <p className="award-note">All participants who submit a paper receive a digital certificate with a verifiable ID.</p>
+        <div className="awards-heading"><div><div className="section-kicker">MERIT RECOGNIZED <span>03</span></div><h2>Excellence,<br/><em>rewarded.</em></h2></div><p>Three cash prizes celebrate outstanding research, with meaningful recognition and keepsakes for every winner.</p></div>
+        <div className="prize-heading"><Trophy aria-hidden="true"/><span>Cash Prizes</span></div>
+        <div className="podium-grid">{awards.map((a) => <article className={`prize-card ${a.tone}`} key={a.place}><span className="prize-rank" aria-label={`${a.place} medal`}>{a.rank}</span><div className="laurel"><Award aria-hidden="true"/></div><p>{a.place}</p><h3>{a.amount}</h3><span className="prize-label">CASH AWARD</span></article>)}</div>
+        <div className="rewards-heading"><div><span className="section-kicker">FOR EVERY WINNER</span><h3>Recognition that lasts.</h3></div><p>Every winner will also receive:</p></div>
+        <div className="rewards-grid">{rewards.map(({ title, description, Icon }) => <article className="reward-card" key={title}><span className="reward-icon"><Icon aria-hidden="true"/></span><div><h4>{title}</h4><p>{description}</p></div></article>)}</div>
       </section>
 
       <section className="details-band"><div className="section-wrap details-layout"><div><div className="section-kicker">PLAN YOUR PARTICIPATION <span>04</span></div><h2>The details,<br/><em>beautifully clear.</em></h2><p>Everything you need to take the next step in your research journey.</p><Link to="/register" className="btn-gold">Begin registration <span>↗</span></Link></div>
