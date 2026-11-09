@@ -11,6 +11,7 @@ import Editor from './pages/Editor'
 import JudgeDashboard from './pages/JudgeDashboard'
 import JudgeEvaluate from './pages/JudgeEvaluate'
 import AdminDashboard from './pages/AdminDashboard'
+import AdminJudgeDetails from './pages/AdminJudgeDetails'
 import Results from './pages/Results'
 import VerifyCertificate from './pages/VerifyCertificate'
 
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="/judge/:submissionId" element={<ProtectedRoute roles={['judge']}><JudgeEvaluate /></ProtectedRoute>} />
 
         <Route path="/admin" element={<ProtectedRoute roles={['admin']}><AdminDashboard /></ProtectedRoute>} />
+        <Route path="/admin/judges/:judgeId" element={<ProtectedRoute roles={['admin']}><AdminJudgeDetails /></ProtectedRoute>} />
         <Route path="*" element={<p className="p-10 text-center">Page not found.</p>} />
       </Route>
     </Routes>

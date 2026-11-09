@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { fmtDate, rupees } from '../lib/utils'
 import ReportPanel from '../components/ReportPanel'
@@ -70,7 +71,8 @@ function downloadCsv(name: string, csv: string) {
 }
 
 export default function AdminDashboard() {
-  const [tab, setTab] = useState<Tab>('overview')
+  const location = useLocation()
+  const [tab, setTab] = useState<Tab>(() => (location.state as { adminTab?: Tab } | null)?.adminTab === 'judges' ? 'judges' : 'overview')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [isMobileLayout, setIsMobileLayout] = useState(() => window.matchMedia('(max-width: 1023px)').matches)
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null)
@@ -1253,9 +1255,9 @@ function JudgesTab({ showMsg }: { showMsg: (m: string, t?: any) => void }) {
   const [query, setQuery] = useState('')
   const [existingEmail, setExistingEmail] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
-  const [modal, setModal] = useState<'create' | 'details' | 'edit' | 'password' | null>(null)
+  const [modal, setModal] = useState<'create' | 'edit' | 'password' | null>(null)
   const [selected, setSelected] = useState<any>(null)
-  const [form, setForm] = useState({ fullName: '', email: '', password: '', confirmPassword: '', accountActive: true })
+  const [form, setForm] = useState({ fullName: '', email: '', expertise: '', password: '', confirmPassword: '', accountActive: true })
   const [showPassword, setShowPassword] = useState(false)
 
   const load = useCallback(async () => {
@@ -1270,7 +1272,7 @@ function JudgesTab({ showMsg }: { showMsg: (m: string, t?: any) => void }) {
 
   const closeModal = () => {
     setModal(null); setSelected(null); setShowPassword(false)
-    setForm({ fullName: '', email: '', password: '', confirmPassword: '', accountActive: true })
+    setForm({ fullName: '', email: '', expertise: '', password: '', confirmPassword: '', accountActive: true })
   }
 
   const invoke = async (action: string, payload: Record<string, unknown>, success: string, busyId: string) => {
@@ -1314,7 +1316,7 @@ function JudgesTab({ showMsg }: { showMsg: (m: string, t?: any) => void }) {
       showMsg('Password must be 12+ characters and include uppercase, lowercase, number, and symbol.', 'error'); return
     }
     if (form.password !== form.confirmPassword) { showMsg('Passwords do not match.', 'error'); return }
-    const ok = await invoke('create', { fullName: form.fullName.trim(), email: form.email.trim(), password: form.password }, 'Judge account created. Share the initial password securely.', 'create')
+    const ok = await invoke('create', { fullName: form.fullName.trim(), email: form.email.trim(), expertise: form.expertise.trim(), password: form.password }, 'Judge account created. Share the initial password securely.', 'create')
     if (ok) closeModal()
   }
 
@@ -1323,7 +1325,7 @@ function JudgesTab({ showMsg }: { showMsg: (m: string, t?: any) => void }) {
     if (!selected) return
     if (selected.account_active && !form.accountActive && !window.confirm('Deactivate this judge? They will lose judge access immediately.')) return
     if (!selected.account_active && form.accountActive && !window.confirm('Reactivate this judge account? Existing assignments will become accessible again.')) return
-    const ok = await invoke('update', { userId: selected.id, fullName: form.fullName.trim(), email: form.email.trim(), accountActive: form.accountActive }, 'Judge details updated.', selected.id)
+    const ok = await invoke('update', { userId: selected.id, fullName: form.fullName.trim(), email: form.email.trim(), expertise: form.expertise.trim(), accountActive: form.accountActive }, 'Judge details updated.', selected.id)
     if (ok) closeModal()
   }
 
@@ -1340,10 +1342,10 @@ function JudgesTab({ showMsg }: { showMsg: (m: string, t?: any) => void }) {
   }
 
   const openEdit = (judge: any) => {
-    setSelected(judge); setForm({ fullName: judge.full_name, email: judge.email, password: '', confirmPassword: '', accountActive: judge.account_active }); setModal('edit')
+    setSelected(judge); setForm({ fullName: judge.full_name, email: judge.email, expertise: judge.expertise ?? '', password: '', confirmPassword: '', accountActive: judge.account_active }); setModal('edit')
   }
   const openPassword = (judge: any) => {
-    setSelected(judge); setForm({ fullName: '', email: '', password: '', confirmPassword: '', accountActive: judge.account_active }); setModal('password')
+    setSelected(judge); setForm({ fullName: '', email: '', expertise: '', password: '', confirmPassword: '', accountActive: judge.account_active }); setModal('password')
   }
   const toggleStatus = async (judge: any) => {
     const next = !judge.account_active
@@ -1385,7 +1387,7 @@ function JudgesTab({ showMsg }: { showMsg: (m: string, t?: any) => void }) {
   return <div className="space-y-5">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><h2 className="font-serif text-lg font-bold text-royal-950">Judge Accounts</h2><p className="text-xs text-slate-500">Create and manage judge access, assignments, and evaluations.</p></div>
-      <button onClick={() => { setForm({ fullName: '', email: '', password: '', confirmPassword: '', accountActive: true }); setModal('create') }} className="btn-primary !py-2.5 !text-xs"><UserPlus className="h-4 w-4" /> Create Judge Account</button>
+      <button onClick={() => { setForm({ fullName: '', email: '', expertise: '', password: '', confirmPassword: '', accountActive: true }); setModal('create') }} className="btn-primary !py-2.5 !text-xs"><UserPlus className="h-4 w-4" /> Create Judge Account</button>
     </div>
 
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -1406,15 +1408,15 @@ function JudgesTab({ showMsg }: { showMsg: (m: string, t?: any) => void }) {
 
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       {loading ? <p className="p-8 text-center text-xs text-slate-500">Loading judge accounts…</p> : visible.length === 0 ? <p className="p-8 text-center text-xs text-slate-500">No judges match this search.</p> : <div className="overflow-x-auto">
-        <table className="w-full min-w-[1050px] text-left text-xs">
+        <table className="w-full min-w-[1150px] text-left text-xs">
           <thead className="border-b border-slate-200 bg-royal-50 text-[10px] font-semibold uppercase tracking-wider text-royal-900"><tr>
-            <th className="px-4 py-3">Judge ID</th><th className="px-4 py-3">Full Name</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Assigned Papers</th><th className="px-4 py-3">Evaluations</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Created</th><th className="px-4 py-3">Actions</th>
+            <th className="px-4 py-3">Judge ID</th><th className="px-4 py-3">Full Name</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Contact Number</th><th className="px-4 py-3">Designation</th><th className="px-4 py-3">Assigned Papers</th><th className="px-4 py-3">Evaluations</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Created</th><th className="px-4 py-3">Actions</th>
           </tr></thead><tbody className="divide-y divide-slate-100">{visible.map((judge) => <tr key={judge.id}>
-            <td className="px-4 py-3 font-mono text-[10px] text-slate-500" title={judge.id}>{judge.id}</td><td className="px-4 py-3 font-semibold text-slate-900">{judge.full_name}</td><td className="px-4 py-3 text-slate-600">{judge.email}</td>
+            <td className="px-4 py-3 font-mono text-[10px]" title={judge.id}><Link to={`/admin/judges/${judge.id}`} className="text-royal-700 underline decoration-dotted underline-offset-2 hover:text-royal-900">{judge.id}</Link></td><td className="px-4 py-3 font-semibold text-slate-900">{judge.full_name}</td><td className="px-4 py-3 text-slate-600">{judge.email}</td><td className="px-4 py-3 text-slate-600">{judge.contact_number || '—'}</td><td className="px-4 py-3 text-slate-600">{judge.expertise || '—'}</td>
             <td className="px-4 py-3">{judge.assigned_papers.length}</td><td className="px-4 py-3">{judge.evaluation_count} total · {judge.completed_evaluations} complete · {judge.pending_evaluations} pending</td>
             <td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${judge.account_active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>{judge.account_active ? 'Active' : 'Inactive'}</span></td>
             <td className="px-4 py-3 whitespace-nowrap text-slate-500">{fmtDate(judge.created_at)}</td><td className="px-4 py-3"><div className="flex gap-1">
-      <button title="View details" aria-label="View details" onClick={() => { setSelected(judge); setModal('details') }} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"><Eye className="h-4 w-4" /></button>
+      <Link title="View judge details" aria-label={`View details for ${judge.full_name}`} to={`/admin/judges/${judge.id}`} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"><Eye className="h-4 w-4" /></Link>
               <button title="Edit judge" aria-label="Edit judge" onClick={() => openEdit(judge)} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"><Pencil className="h-4 w-4" /></button>
               <button title="Reset password" aria-label="Reset password" onClick={() => openPassword(judge)} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"><KeyRound className="h-4 w-4" /></button>
               <button title={judge.account_active ? 'Deactivate' : 'Activate'} aria-label={judge.account_active ? 'Deactivate judge' : 'Activate judge'} disabled={busy === judge.id} onClick={() => toggleStatus(judge)} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 disabled:opacity-40"><Power className="h-4 w-4" /></button>
@@ -1427,23 +1429,15 @@ function JudgesTab({ showMsg }: { showMsg: (m: string, t?: any) => void }) {
 
     {modal && <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-black/60 p-4" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) closeModal() }}>
       <div role="dialog" aria-modal="true" aria-labelledby="judge-modal-title" className="my-auto max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
-        <div className="mb-5 flex items-center justify-between"><h2 id="judge-modal-title" className="font-serif text-xl font-bold text-royal-950">{modal === 'create' ? 'Create judge account' : modal === 'details' ? 'Judge details' : modal === 'edit' ? 'Edit judge account' : 'Reset judge password'}</h2><button onClick={closeModal} aria-label="Close" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X className="h-4 w-4" /></button></div>
+        <div className="mb-5 flex items-center justify-between"><h2 id="judge-modal-title" className="font-serif text-xl font-bold text-royal-950">{modal === 'create' ? 'Create judge account' : modal === 'edit' ? 'Edit judge account' : 'Reset judge password'}</h2><button onClick={closeModal} aria-label="Close" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X className="h-4 w-4" /></button></div>
         <>
-        {modal === 'details' && selected && <div className="space-y-4 text-sm">
-          <div className="grid gap-3 sm:grid-cols-2"><Detail label="Judge ID" value={selected.id} /><Detail label="Full Name" value={selected.full_name} /><Detail label="Email" value={selected.email} /><Detail label="Account Status" value={selected.account_active ? 'Active' : 'Inactive'} /><Detail label="Assigned Papers" value={String(selected.assigned_papers.length)} /><Detail label="Completed Evaluations" value={String(selected.completed_evaluations)} /><Detail label="Pending Evaluations" value={String(selected.pending_evaluations)} /><Detail label="Account Created" value={fmtDate(selected.created_at)} /><Detail label="Last Login" value={fmtDate(selected.last_sign_in_at)} /></div>
-          <div><p className="mb-2 text-xs font-bold uppercase text-slate-500">Assigned papers</p>{selected.assigned_papers.length ? <ul className="list-disc space-y-1 pl-5 text-xs text-slate-700">{selected.assigned_papers.map((paper: any) => <li key={paper.id}>{paper.title}</li>)}</ul> : <p className="text-xs text-slate-500">No papers assigned.</p>}</div>
-        </div>}
-        {modal === 'create' && <form onSubmit={submitCreate} className="space-y-4"><div className="space-y-1"><label className="label">Full name</label><input required className="input" autoComplete="name" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></div><div className="space-y-1"><label className="label">Email address</label><input required type="email" className="input" autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>{passwordFields}<div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={generateTemporaryPassword} className="btn-outline !text-xs">Generate temporary password</button><button type="button" disabled={!form.password} onClick={() => navigator.clipboard.writeText(form.password).then(() => showMsg('Password copied. Deliver it securely.'), () => showMsg('Could not copy password. Select and copy it manually.', 'error'))} className="btn-outline !text-xs">Copy password</button><button disabled={busy === 'create'} className="btn-primary !text-xs">{busy === 'create' ? 'Creating…' : 'Create Judge Account'}</button></div></form>}
-        {modal === 'edit' && selected && <form onSubmit={submitEdit} className="space-y-4"><div className="space-y-1"><label className="label">Full name</label><input required className="input" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></div><div className="space-y-1"><label className="label">Email address</label><input required type="email" className="input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /><p className="text-[11px] text-slate-500">This updates Supabase Auth and the profile email immediately as an administrator action.</p></div><div className="space-y-1"><label className="label">Account status</label><select className="input" value={String(form.accountActive)} onChange={(e) => setForm({ ...form, accountActive: e.target.value === 'true' })}><option value="true">Active</option><option value="false">Inactive</option></select></div><div className="flex justify-end"><button disabled={busy === selected.id} className="btn-primary !text-xs">{busy === selected.id ? 'Saving…' : 'Save changes'}</button></div></form>}
+        {modal === 'create' && <form onSubmit={submitCreate} className="space-y-4"><div className="space-y-1"><label className="label">Full name</label><input required maxLength={120} className="input" autoComplete="name" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></div><div className="space-y-1"><label className="label">Email address</label><input required type="email" maxLength={254} className="input" autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div><div className="space-y-1"><label className="label">Judge designation / expertise <span className="font-normal normal-case text-slate-400">(optional)</span></label><input maxLength={160} className="input" value={form.expertise} onChange={(e) => setForm({ ...form, expertise: e.target.value })} /></div>{passwordFields}<div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={closeModal} className="btn-outline !text-xs">Cancel</button><button type="button" onClick={generateTemporaryPassword} className="btn-outline !text-xs">Generate temporary password</button><button type="button" disabled={!form.password} onClick={() => navigator.clipboard.writeText(form.password).then(() => showMsg('Password copied. Deliver it securely.'), () => showMsg('Could not copy password. Select and copy it manually.', 'error'))} className="btn-outline !text-xs">Copy password</button><button disabled={busy === 'create'} className="btn-primary !text-xs">{busy === 'create' ? 'Creating…' : 'Create Judge Account'}</button></div></form>}
+        {modal === 'edit' && selected && <form onSubmit={submitEdit} className="space-y-4"><div className="space-y-1"><label className="label">Full name</label><input required maxLength={120} className="input" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></div><div className="space-y-1"><label className="label">Email address</label><input required type="email" maxLength={254} className="input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /><p className="text-[11px] text-slate-500">This updates Supabase Auth and the profile email immediately as an administrator action.</p></div><div className="space-y-1"><label className="label">Judge designation / expertise</label><input maxLength={160} className="input" value={form.expertise} onChange={(e) => setForm({ ...form, expertise: e.target.value })} /></div><div className="space-y-1"><label className="label">Account status</label><select className="input" value={String(form.accountActive)} onChange={(e) => setForm({ ...form, accountActive: e.target.value === 'true' })}><option value="true">Active</option><option value="false">Inactive</option></select></div><div className="flex justify-end gap-2"><button type="button" onClick={closeModal} className="btn-outline !text-xs">Cancel</button><button disabled={busy === selected.id} className="btn-primary !text-xs">{busy === selected.id ? 'Saving…' : 'Save changes'}</button></div></form>}
         {modal === 'password' && selected && <form onSubmit={submitPassword} className="space-y-4">{passwordFields}<div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={generateTemporaryPassword} className="btn-outline !text-xs">Generate temporary password</button><button type="button" disabled={!form.password} onClick={() => navigator.clipboard.writeText(form.password).then(() => showMsg('Password copied. Deliver it securely.'), () => showMsg('Could not copy password. Select and copy it manually.', 'error'))} className="btn-outline !text-xs">Copy password</button><button disabled={busy === selected.id} className="btn-primary !text-xs">{busy === selected.id ? 'Resetting…' : 'Reset password'}</button></div></form>}
         </>
       </div>
     </div>}
   </div>
-}
-
-function Detail({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 break-all text-xs text-slate-800">{value || '—'}</p></div>
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────

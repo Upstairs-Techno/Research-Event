@@ -37,7 +37,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     if (action === 'list') {
-      const { data: judges, error } = await admin.from('judges').select('user_id, created_at').order('created_at', { ascending: false })
+      const { data: judges, error } = await admin.from('judges').select('user_id, expertise, created_at').order('created_at', { ascending: false })
       if (error) throw error
       const ids = (judges ?? []).map((j) => j.user_id)
       if (!ids.length) return respond({ judges: [] })
@@ -71,6 +71,8 @@ Deno.serve(async (req: Request) => {
           id: judge.user_id,
           full_name: profile?.full_name ?? '',
           email: profile?.email ?? '',
+          expertise: judge.expertise ?? '',
+          contact_number: authResult.user.phone || authResult.user.user_metadata?.phone || null,
           account_active: profile?.account_active ?? false,
           created_at: profile?.created_at ?? judge.created_at,
           last_sign_in_at: authResult.user.last_sign_in_at ?? null,
@@ -86,9 +88,10 @@ Deno.serve(async (req: Request) => {
     if (action === 'create') {
       const fullName = String(input.fullName ?? '').trim()
       const email = String(input.email ?? '').trim().toLowerCase()
+      const expertise = String(input.expertise ?? '').trim()
       const password = input.password
       if (!fullName || !email || !password) return respond({ error: 'Full name, email, and password are required' }, 400)
-      if (fullName.length > 120 || email.length > 254) return respond({ error: 'Name or email address is too long' }, 400)
+      if (fullName.length > 120 || email.length > 254 || expertise.length > 160) return respond({ error: 'Name, email address, or designation is too long' }, 400)
       if (!EMAIL_RE.test(email)) return respond({ error: 'Enter a valid email address' }, 400)
       if (!validPassword(password)) return respond({ error: 'Password must be 12+ characters and include uppercase, lowercase, number, and symbol' }, 400)
 
@@ -115,13 +118,13 @@ Deno.serve(async (req: Request) => {
         const { error: rollbackError } = await admin.auth.admin.deleteUser(userId)
         throw new Error(`Profile creation failed: ${profileUpsertError.message}${rollbackError ? `; auth-user rollback failed: ${rollbackError.message}` : ''}`)
       }
-      const { error: judgeUpsertError } = await admin.from('judges').upsert({ user_id: userId }, { onConflict: 'user_id' })
+      const { error: judgeUpsertError } = await admin.from('judges').upsert({ user_id: userId, expertise: expertise || null }, { onConflict: 'user_id' })
       if (judgeUpsertError) {
         const { error: rollbackError } = await admin.auth.admin.deleteUser(userId)
         throw new Error(`Judge record creation failed: ${judgeUpsertError.message}${rollbackError ? `; auth-user rollback failed: ${rollbackError.message}` : ''}`)
       }
       try {
-        await writeAudit(admin, caller.id, 'judge.created', userId, { email, full_name: fullName })
+        await writeAudit(admin, caller.id, 'judge.created', userId, { email, full_name: fullName, expertise: expertise || null })
       } catch (auditError) {
         const { error: rollbackError } = await admin.auth.admin.deleteUser(userId)
         const message = auditError instanceof Error ? auditError.message : String(auditError)
@@ -130,21 +133,122 @@ Deno.serve(async (req: Request) => {
       return respond({ success: true, user_id: userId })
     }
 
+    if (action === 'details') {
+      const userId = String(input.userId ?? '')
+      if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(userId)) return respond({ error: 'A valid judge account ID is required' }, 400)
+      const [{ data: profile, error: profileError }, { data: judge, error: judgeError }, { data: authResult, error: authError }] = await Promise.all([
+        admin.from('profiles').select('id, email, full_name, role, account_active, created_at').eq('id', userId).maybeSingle(),
+        admin.from('judges').select('user_id, expertise, created_at').eq('user_id', userId).maybeSingle(),
+        admin.auth.admin.getUserById(userId),
+      ])
+      if (profileError || judgeError || authError) throw profileError || judgeError || authError
+      if (!profile || profile.role !== 'judge' || !judge) return respond({ error: 'Judge account not found' }, 404)
+
+      const { data: assignmentRows, error: assignmentsError } = await admin.from('judge_assignments')
+        .select('submission_id, created_at, submissions(id, title, registration_id, submitted_at, status)')
+        .eq('judge_id', userId)
+        .order('created_at', { ascending: false })
+      if (assignmentsError) throw assignmentsError
+
+      const submissions = (assignmentRows ?? []).map((assignment: any) => Array.isArray(assignment.submissions) ? assignment.submissions[0] : assignment.submissions).filter(Boolean)
+      const submissionIds = [...new Set(submissions.map((submission: any) => submission.id))]
+      const registrationIds = [...new Set(submissions.map((submission: any) => submission.registration_id).filter(Boolean))]
+      const [{ data: registrations, error: registrationsError }, { data: evaluations, error: evaluationsError }] = await Promise.all([
+        registrationIds.length
+          ? admin.from('registrations').select('id, user_id, participant_id, category_id, research_title, research_categories(name)').in('id', registrationIds)
+          : Promise.resolve({ data: [], error: null }),
+        submissionIds.length
+          ? admin.from('evaluations').select('submission_id, status, total, approved, updated_at').eq('judge_id', userId).in('submission_id', submissionIds)
+          : Promise.resolve({ data: [], error: null }),
+      ])
+      if (registrationsError || evaluationsError) throw registrationsError || evaluationsError
+
+      const registrationRows = registrations ?? []
+      const participantIds = [...new Set(registrationRows.map((registration: any) => registration.participant_id).filter(Boolean))]
+      const participantUserIds = [...new Set(registrationRows.map((registration: any) => registration.user_id).filter(Boolean))]
+      const [{ data: participants, error: participantsError }, { data: participantProfiles, error: participantProfilesError }] = await Promise.all([
+        participantIds.length
+          ? admin.from('participants').select('id, user_id, participant_code').in('id', participantIds)
+          : Promise.resolve({ data: [], error: null }),
+        participantUserIds.length
+          ? admin.from('profiles').select('id, full_name, email').in('id', participantUserIds)
+          : Promise.resolve({ data: [], error: null }),
+      ])
+      if (participantsError || participantProfilesError) throw participantsError || participantProfilesError
+
+      const registrationMap = new Map(registrationRows.map((registration: any) => [registration.id, registration]))
+      const participantMap = new Map((participants ?? []).map((participant: any) => [participant.id, participant]))
+      const participantProfileMap = new Map((participantProfiles ?? []).map((participantProfile: any) => [participantProfile.id, participantProfile]))
+      const evaluationMap = new Map((evaluations ?? []).map((evaluation: any) => [evaluation.submission_id, evaluation]))
+      const assignedParticipants = new Set<string>()
+      const evaluatedParticipants = new Set<string>()
+      const completedParticipants = new Set<string>()
+      const assigned = submissions.map((submission: any) => {
+        const registration = registrationMap.get(submission.registration_id) as any
+        const participant = registration ? participantMap.get(registration.participant_id) as any : null
+        const participantProfile = participant ? participantProfileMap.get(participant.user_id) as any : null
+        const evaluation = evaluationMap.get(submission.id) as any
+        const participantKey = registration?.participant_id ?? registration?.user_id ?? submission.id
+        assignedParticipants.add(participantKey)
+        const evaluated = evaluation?.status === 'submitted'
+        const completed = evaluated && evaluation?.approved === true
+        if (evaluated) evaluatedParticipants.add(participantKey)
+        if (completed) completedParticipants.add(participantKey)
+        return {
+          submission_id: submission.id,
+          participant_name: participantProfile?.full_name ?? 'Unknown participant',
+          participant_id: participant?.participant_code ?? '—',
+          participant_email: participantProfile?.email ?? '',
+          research_title: registration?.research_title ?? submission.title ?? 'Untitled submission',
+          category: registration?.research_categories?.name ?? '—',
+          submitted_at: submission.submitted_at,
+          assignment_created_at: (assignmentRows ?? []).find((assignment: any) => assignment.submission_id === submission.id)?.created_at ?? null,
+          evaluation_status: completed ? 'completed' : evaluated ? 'evaluated' : 'pending',
+          evaluation_score: evaluated ? Number(evaluation.total) : null,
+          evaluation_date: evaluated ? evaluation.updated_at : null,
+        }
+      })
+      const recentEvaluations = assigned.filter((row: any) => row.evaluation_status !== 'pending').sort((a: any, b: any) => new Date(b.evaluation_date).getTime() - new Date(a.evaluation_date).getTime()).slice(0, 10)
+      const evaluatedPaperCount = assigned.filter((row: any) => row.evaluation_status !== 'pending').length
+      const completedPaperCount = assigned.filter((row: any) => row.evaluation_status === 'completed').length
+      return respond({
+        judge: {
+          id: userId, full_name: profile.full_name, email: profile.email,
+          account_active: profile.account_active, created_at: judge.created_at ?? profile.created_at,
+          last_sign_in_at: authResult.user.last_sign_in_at ?? null, expertise: judge.expertise ?? '',
+          contact_number: authResult.user.phone || authResult.user.user_metadata?.phone || null,
+        },
+        statistics: {
+          assigned_participants: assignedParticipants.size,
+          evaluated_participants: evaluatedParticipants.size,
+          pending_participants: assignedParticipants.size - evaluatedParticipants.size,
+          completed_participants: completedParticipants.size,
+          assigned_papers: assigned.length,
+          evaluated_papers: evaluatedPaperCount,
+          pending_papers: assigned.length - evaluatedPaperCount,
+          completed_papers: completedPaperCount,
+        },
+        participants: assigned,
+        recent_evaluations: recentEvaluations,
+      })
+    }
+
     const userId = String(input.userId ?? '')
     if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(userId)) return respond({ error: 'A valid judge account ID is required' }, 400)
     const { data: profile, error: judgeError } = await admin.from('profiles')
       .select('id, email, full_name, role, account_active').eq('id', userId).maybeSingle()
     if (judgeError) throw judgeError
     if (!profile || profile.role !== 'judge') return respond({ error: 'Judge account not found' }, 404)
-    const { data: judgeRow, error: judgeRowError } = await admin.from('judges').select('user_id').eq('user_id', userId).maybeSingle()
+    const { data: judgeRow, error: judgeRowError } = await admin.from('judges').select('user_id, expertise').eq('user_id', userId).maybeSingle()
     if (judgeRowError) throw judgeRowError
     if (!judgeRow) return respond({ error: 'Judge account not found' }, 404)
 
     if (action === 'update') {
       const fullName = String(input.fullName ?? '').trim()
       const email = String(input.email ?? '').trim().toLowerCase()
+      const expertise = String(input.expertise ?? '').trim()
       if (!fullName || !email) return respond({ error: 'Full name and email are required' }, 400)
-      if (fullName.length > 120 || email.length > 254) return respond({ error: 'Name or email address is too long' }, 400)
+      if (fullName.length > 120 || email.length > 254 || expertise.length > 160) return respond({ error: 'Name, email address, or designation is too long' }, 400)
       if (!EMAIL_RE.test(email)) return respond({ error: 'Enter a valid email address' }, 400)
       const { data: authUser, error: getAuthError } = await admin.auth.admin.getUserById(userId)
       if (getAuthError) throw getAuthError
@@ -162,6 +266,8 @@ Deno.serve(async (req: Request) => {
         await admin.auth.admin.updateUserById(userId, { email: authUser.user.email!, email_confirm: true, user_metadata: authUser.user.user_metadata })
         throw updateError
       }
+      const { error: expertiseError } = await admin.from('judges').update({ expertise: expertise || null }).eq('user_id', userId)
+      if (expertiseError) throw expertiseError
       if (!accountActive && profile.account_active) {
         const { error: banError } = await admin.auth.admin.updateUserById(userId, { ban_duration: BAN_DURATION })
         if (banError) {
@@ -172,6 +278,7 @@ Deno.serve(async (req: Request) => {
       await writeAudit(admin, caller.id, 'judge.updated', userId, {
         email_changed: profile.email !== email, full_name_changed: profile.full_name !== fullName,
         status_changed: profile.account_active !== accountActive, account_active: accountActive,
+        expertise_changed: judgeRow.expertise !== (expertise || null),
       })
       return respond({ success: true })
     }
