@@ -37,6 +37,7 @@ export default function Dashboard() {
   const [sub, setSub] = useState<any>(null)
   const [reports, setReports] = useState<any[]>([])
   const [evals, setEvals] = useState<any[]>([])
+  const [judgingStatus, setJudgingStatus] = useState<any>(null)
   const [result, setResult] = useState<any>(null)
   const [certs, setCerts] = useState<any[]>([])
   const [notifications, setNotifications] = useState<any[]>([])
@@ -72,9 +73,11 @@ export default function Dashboard() {
             .select('kind, status, score')
             .eq('submission_id', s.id)
             .order('created_at', { ascending: false }),
-          supabase.from('evaluations').select('total, feedback').eq('submission_id', s.id),
+          supabase.from('evaluations').select('total, feedback, decision, rejection_reason, improvement_suggestions, evaluated_at').eq('submission_id', s.id),
           supabase.from('results').select('*').eq('submission_id', s.id).maybeSingle(),
         ])
+        const { data: judgeState } = await supabase.rpc('participant_judging_status', { p_submission: s.id })
+        setJudgingStatus(judgeState)
         setReports(rep ?? [])
         setEvals(ev ?? [])
         setResult(res)
@@ -151,9 +154,14 @@ export default function Dashboard() {
   const getSubmissionStatus = () => {
     if (!sub) return { label: 'Not Started', color: 'bg-slate-100 text-slate-700 border-slate-200', icon: HelpCircle }
     if (published) return { label: 'Results Announced', color: 'bg-purple-100 text-purple-800 border-purple-200', icon: Trophy }
+    if (judgingStatus?.status === 'rejected') return { label: 'Rejected', color: 'bg-red-100 text-red-800 border-red-200', icon: XCircle }
+    if (judgingStatus?.status === 'accepted') return { label: 'Accepted', color: 'bg-emerald-100 text-emerald-800 border-emerald-200', icon: CheckCircle2 }
     if (sub.review_decision === 'rejected') return { label: 'Rejected', color: 'bg-red-100 text-red-800 border-red-200', icon: XCircle }
     if (sub.review_decision === 'approved') return { label: 'Approved', color: 'bg-emerald-100 text-emerald-800 border-emerald-200', icon: CheckCircle2 }
     if (sub.locked) {
+      if (sub.review_decision === 'approved' && judgingStatus?.status === 'awaiting_assignment') return { label: 'Awaiting Judge Assignment', color: 'bg-blue-100 text-blue-800 border-blue-200', icon: Clock }
+      if (sub.review_decision === 'approved' && judgingStatus?.status === 'assigned') return { label: 'Assigned to Judge', color: 'bg-blue-100 text-blue-800 border-blue-200', icon: Clock }
+      if (judgingStatus?.status === 'under_review') return { label: 'Under Review', color: 'bg-amber-100 text-amber-800 border-amber-200', icon: Clock }
       if (sub.status === 'under_review') return { label: 'Under Review', color: 'bg-amber-100 text-amber-800 border-amber-200', icon: Clock }
       return { label: 'Submitted', color: 'bg-blue-100 text-blue-800 border-blue-200', icon: CheckCircle2 }
     }
@@ -259,6 +267,24 @@ export default function Dashboard() {
           2. COMPETITION SCHEDULE & LIVE COUNTDOWN
           ───────────────────────────────────────────────────────────── */}
       <CompetitionScheduleCard settings={settings} />
+
+      {judgingStatus?.status === 'rejected' && (
+        <section role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-5 sm:p-6">
+          <p className="text-xs font-bold uppercase tracking-wider text-red-700">Judge evaluation · {fmtDate(judgingStatus.evaluated_at)}</p>
+          <h2 className="mt-1 font-serif text-xl font-bold text-red-950">Research paper rejected</h2>
+          {judgingStatus.rejection_reason && <p className="mt-3 text-sm text-red-900"><strong>Reason:</strong> {judgingStatus.rejection_reason}</p>}
+          {judgingStatus.feedback && <div className="mt-3 rounded-xl bg-white p-4 text-sm text-slate-700"><strong>Feedback</strong><p className="mt-1 whitespace-pre-wrap">{judgingStatus.feedback}</p></div>}
+          {judgingStatus.improvement_suggestions && <div className="mt-3 rounded-xl bg-white p-4 text-sm text-slate-700"><strong>Improvement suggestions</strong><p className="mt-1 whitespace-pre-wrap">{judgingStatus.improvement_suggestions}</p></div>}
+        </section>
+      )}
+      {judgingStatus?.status === 'accepted' && (
+        <section role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 sm:p-6">
+          <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Judge evaluation · {fmtDate(judgingStatus.evaluated_at)}</p>
+          <h2 className="mt-1 font-serif text-xl font-bold text-emerald-950">Research paper accepted</h2>
+          {published && <p className="mt-2 text-sm text-emerald-900">Evaluation score: {judgingStatus.total}/100</p>}
+          {judgingStatus.feedback && <div className="mt-3 rounded-xl bg-white p-4 text-sm text-slate-700"><strong>Judge feedback</strong><p className="mt-1 whitespace-pre-wrap">{judgingStatus.feedback}</p></div>}
+        </section>
+      )}
 
       {/* ─────────────────────────────────────────────────────────────
           3. REJECTION OR APPROVAL ALERTS (MANDATORY REQUIREMENT)

@@ -532,6 +532,21 @@ function EditorInner({ initial, registration }: { initial: any; registration: an
     }
   }
 
+  const uploadPaperPdf = async (file: File) => {
+    if (!user || !editor) return
+    if (file.type !== 'application/pdf' || file.size > 20 * 1024 * 1024) {
+      setNote('Research paper PDFs must be valid PDF files under 20 MB.')
+      return
+    }
+    const path = `${user.id}/${crypto.randomUUID()}-${file.name.replace(/[^\w.-]/g, '_')}`
+    const { error } = await supabase.storage.from('submission-assets').upload(path, file, { contentType: 'application/pdf' })
+    if (error) { setNote(error.message); return }
+    const { data, error: urlError } = await supabase.storage.from('submission-assets').createSignedUrl(path, 60 * 60 * 24 * 365)
+    if (urlError || !data?.signedUrl) { setNote(urlError?.message || 'Could not create a view link for this PDF.'); return }
+    editor.chain().focus().insertContent({ type: 'text', text: `Uploaded research paper: ${file.name}`, marks: [{ type: 'link', attrs: { href: data.signedUrl } }] }).run()
+    setNote('PDF uploaded and added to the research paper.')
+  }
+
   // Pre-writing policy check
   if (!policyOk && !locked) {
     return (
@@ -1003,6 +1018,11 @@ function EditorInner({ initial, registration }: { initial: any; registration: an
                       e.target.value = ''
                     }}
                   />
+                </label>
+
+                <label className="cursor-pointer rounded-lg px-2 py-2 text-xs font-semibold text-royal-800 hover:bg-royal-50" title="Upload research paper PDF (max 20MB)">
+                  PDF
+                  <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadPaperPdf(f); e.target.value = '' }} />
                 </label>
 
                 <div className="h-5 w-px bg-slate-200 mx-1 ml-auto" />

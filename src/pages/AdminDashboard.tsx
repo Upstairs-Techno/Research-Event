@@ -42,13 +42,14 @@ import {
 } from 'lucide-react'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-type Tab = 'overview' | 'registrations' | 'payments' | 'submissions' | 'evaluations' | 'judges' | 'results' | 'settings' | 'audit'
+type Tab = 'overview' | 'registrations' | 'payments' | 'submissions' | 'assignments' | 'evaluations' | 'judges' | 'results' | 'settings' | 'audit'
 
 const TABS: { id: Tab; label: string; icon: any }[] = [
   { id: 'overview', label: 'Overview & Analytics', icon: LayoutDashboard },
   { id: 'registrations', label: 'Participants', icon: Users },
   { id: 'payments', label: 'Payments', icon: CreditCard },
   { id: 'submissions', label: 'Review Submissions', icon: FileText },
+  { id: 'assignments', label: 'Judge Assignments', icon: UserCheck },
   { id: 'evaluations', label: 'Evaluation Approval', icon: CheckCircle2 },
   { id: 'judges', label: 'Judges Management', icon: ShieldCheck },
   { id: 'results', label: 'Results & Awards', icon: Award },
@@ -192,6 +193,7 @@ export default function AdminDashboard() {
           {tab === 'registrations' && <RegistrationsTab showMsg={showMsg} />}
           {tab === 'payments' && <PaymentsTab />}
           {tab === 'submissions' && <SubmissionsReviewTab showMsg={showMsg} />}
+          {tab === 'assignments' && <JudgeAssignmentsTab showMsg={showMsg} />}
           {tab === 'evaluations' && <EvaluationApprovalTab showMsg={showMsg} />}
           {tab === 'judges' && <JudgesTab showMsg={showMsg} />}
           {tab === 'results' && <ResultsManagementTab showMsg={showMsg} />}
@@ -202,6 +204,68 @@ export default function AdminDashboard() {
     </div>
   )
 }
+
+function JudgeAssignmentsTab({ showMsg }: { showMsg: (m: string, t?: any) => void }) {
+  const [papers, setPapers] = useState<any[]>([])
+  const [judges, setJudges] = useState<any[]>([])
+  const [selected, setSelected] = useState<string[]>([])
+  const [judgeId, setJudgeId] = useState('')
+  const [search, setSearch] = useState('')
+  const [filterJudge, setFilterJudge] = useState('')
+  const [page, setPage] = useState(1)
+  const PAGE = 12
+  const load = useCallback(async () => {
+    const [{ data: p, error: pError }, { data: j, error: jError }] = await Promise.all([
+      supabase.from('submissions').select('id,title,submitted_at,review_decision,registrations(research_categories(name),participants(participant_code)),judge_assignments(id,judge_id,status,created_at,assigned_by,evaluations(status,decision,total,updated_at))').eq('locked',true).order('submitted_at',{ascending:false}),
+      supabase.from('judges').select('user_id,expertise,profiles(full_name,email,account_active,created_at)'),
+    ])
+    if (pError || jError) { showMsg(`Could not load assignment data: ${(pError || jError)?.message}`, 'error'); return }
+    setPapers(p ?? []); setJudges((j ?? []).filter((row: any) => row.profiles?.account_active))
+  }, [showMsg])
+  useEffect(() => { void load() }, [load])
+  const assignments = papers.flatMap((p: any) => (p.judge_assignments ?? []).filter((a: any) => a.status === 'active').map((a: any) => ({ ...a, paper: p })))
+  const counts = (id: string) => {
+    const mine = assignments.filter((a: any) => a.judge_id === id)
+    const done = mine.filter((a: any) => a.evaluations?.some((e: any) => e.status === 'submitted')).length
+    return { assigned: mine.length, done, pending: mine.length - done }
+  }
+  const filteredAssignments = assignments.filter((a: any) => {
+    const text = `${a.paper.title} ${a.paper.id} ${a.paper.registrations?.participants?.participant_code ?? ''} ${a.paper.registrations?.research_categories?.name ?? ''}`.toLowerCase()
+    return (!filterJudge || a.judge_id === filterJudge) && text.includes(search.trim().toLowerCase())
+  })
+  const pageCount = Math.max(1,Math.ceil(filteredAssignments.length/PAGE)); const safePage=Math.min(page,pageCount)
+  const run = async (action: string,paper: any,assignment: any|null,targetJudge: string) => {
+    if (!window.confirm(action === 'assign' ? 'Are you sure you want to assign these research papers to the selected Judge?' : action === 'remove' ? 'Remove this active assignment? The history will be retained.' : 'Reassign this paper to the selected Judge?')) return
+    const { error } = await supabase.rpc('admin_manage_judge_assignment',{p_action:action,p_submission:paper.id,p_judge:assignment?.judge_id ?? targetJudge,p_assignment:assignment?.id ?? null,p_new_judge:action==='reassign'?targetJudge:null})
+    if (error) showMsg(error.message,'error'); else { showMsg(action==='remove'?'Assignment removed and retained in history.':action==='reassign'?'Assignment reassigned.':'Paper assigned successfully.'); await load() }
+  }
+  const bulkAssign = async () => {
+    if (!judgeId || !selected.length) return
+    if (!window.confirm('Are you sure you want to assign these research papers to the selected Judge?')) return
+    let assigned = 0
+    for (const id of selected) {
+      const paper = papers.find((p: any) => p.id === id)
+      const { error } = await supabase.rpc('admin_manage_judge_assignment', { p_action: 'assign', p_submission: id, p_judge: judgeId, p_assignment: null, p_new_judge: null })
+      if (error) { showMsg(`${assigned} assigned; ${paper?.title ?? id}: ${error.message}`, 'error'); break }
+      assigned += 1
+    }
+    if (assigned === selected.length) showMsg(`${assigned} paper${assigned === 1 ? '' : 's'} assigned successfully.`)
+    setSelected([])
+    await load()
+  }
+  const eligible = papers.filter((p: any)=>p.review_decision==='approved')
+  return <div className="space-y-5">
+    <header><h2 className="font-serif text-xl font-bold text-royal-950">Judge Assignment Management</h2><p className="mt-1 text-xs text-slate-500">Assign only locked submissions approved for competitive judging. Multiple reviewers are supported and final scores are averaged by the competition workflow.</p></header>
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{judges.map((j: any)=>{const c=counts(j.user_id);return <article key={j.user_id} className="card"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="truncate font-semibold text-royal-900">{j.profiles?.full_name || j.profiles?.email}</p><p className="break-all text-[11px] text-slate-500">{j.profiles?.email}</p><Link className="mt-1 inline-block font-mono text-[10px] text-royal-700 underline" to={`/admin/judges/${j.user_id}`}>{j.user_id}</Link></div><span className="badge bg-emerald-100 text-emerald-800">Active</span></div><div className="mt-3 grid grid-cols-3 gap-2 border-t pt-3 text-center"><Count label="Assigned" value={c.assigned}/><Count label="Completed" value={c.done}/><Count label="Pending" value={c.pending}/></div></article>})}</section>
+    <section className="card space-y-3"><div><h3 className="font-semibold text-royal-900">Assign eligible papers</h3><p className="text-xs text-slate-500">Select one or more approved submissions and assign them to a single active judge.</p></div><div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(180px,260px)_auto]"><input className="input" placeholder="Search eligible papers" value={search} onChange={(e)=>{setSearch(e.target.value);setPage(1)}}/><select className="input" value={judgeId} onChange={(e)=>setJudgeId(e.target.value)}><option value="">Select active judge</option>{judges.map((j:any)=><option key={j.user_id} value={j.user_id}>{j.profiles?.full_name || j.profiles?.email} · {counts(j.user_id).pending} pending</option>)}</select><button className="btn-primary" disabled={!selected.length||!judgeId} onClick={()=>void bulkAssign()}>Assign {selected.length || ''} selected</button></div>
+      {eligible.length===0?<p className="rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-500">No editorially approved papers are ready for judging.</p>:<div className="max-h-72 overflow-auto rounded-xl border border-slate-200"><table className="w-full min-w-[760px] text-left text-xs"><thead className="sticky top-0 bg-royal-50 text-[10px] uppercase text-royal-900"><tr><th className="p-3"><input type="checkbox" aria-label="Select all eligible papers" checked={eligible.length>0&&eligible.every((p:any)=>selected.includes(p.id))} onChange={(e)=>setSelected(e.target.checked?eligible.map((p:any)=>p.id):[])}/></th><th className="p-3">Submission</th><th className="p-3">Participant ID</th><th className="p-3">Category</th><th className="p-3">Date</th><th className="p-3">Active assignments</th></tr></thead><tbody className="divide-y">{eligible.filter((p:any)=>`${p.title} ${p.id} ${p.registrations?.participants?.participant_code??''}`.toLowerCase().includes(search.trim().toLowerCase())).map((p:any)=><tr key={p.id}><td className="p-3"><input type="checkbox" aria-label={`Select ${p.title}`} checked={selected.includes(p.id)} onChange={(e)=>setSelected(e.target.checked?[...selected,p.id]:selected.filter((id)=>id!==p.id))}/></td><td className="p-3"><span className="font-semibold">{p.title}</span><span className="mt-1 block font-mono text-[10px] text-slate-400">{p.id}</span></td><td className="p-3">{p.registrations?.participants?.participant_code||'—'}</td><td className="p-3">{p.registrations?.research_categories?.name||'—'}</td><td className="p-3">{fmtDate(p.submitted_at)}</td><td className="p-3">{(p.judge_assignments??[]).filter((a:any)=>a.status==='active').length}</td></tr>)}</tbody></table></div>}</section>
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><div className="grid gap-2 border-b p-4 sm:grid-cols-[minmax(0,1fr)_230px]"><div><h3 className="font-serif text-lg font-bold text-royal-950">Active assignments</h3><p className="text-xs text-slate-500">Reassignment and removal preserve the original assignment history.</p></div><select aria-label="Filter assignments by judge" className="input" value={filterJudge} onChange={(e)=>{setFilterJudge(e.target.value);setPage(1)}}><option value="">All judges</option>{judges.map((j:any)=><option key={j.user_id} value={j.user_id}>{j.profiles?.full_name||j.profiles?.email}</option>)}</select></div><div className="grid gap-2 p-4 sm:grid-cols-[minmax(0,1fr)_220px]"><input className="input" placeholder="Search paper, participant ID, category" value={search} onChange={(e)=>{setSearch(e.target.value);setPage(1)}}/><span className="self-center text-xs text-slate-500">{filteredAssignments.length} active assignments</span></div>
+      {filteredAssignments.length===0?<p className="p-8 text-center text-sm text-slate-500">No assignments match the selected filters.</p>:<div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-left text-xs"><thead className="bg-royal-50 text-[10px] uppercase text-royal-900"><tr>{['Judge','Judge ID','Submission','Research Paper','Category','Assigned','Evaluation','Actions'].map((h)=><th key={h} className="p-3">{h}</th>)}</tr></thead><tbody className="divide-y">{filteredAssignments.slice((safePage-1)*PAGE,safePage*PAGE).map((a:any)=>{const judge=judges.find((j:any)=>j.user_id===a.judge_id);const ev=a.evaluations?.[0];return <tr key={a.id}><td className="p-3">{judge?.profiles?.full_name||judge?.profiles?.email||'Judge'}</td><td className="max-w-[140px] truncate p-3 font-mono text-[10px]">{a.judge_id}</td><td className="p-3 font-mono text-[10px]">{a.paper.id}</td><td className="max-w-[220px] whitespace-normal p-3 font-medium">{a.paper.title}</td><td className="p-3">{a.paper.registrations?.research_categories?.name||'—'}</td><td className="p-3">{fmtDate(a.created_at)}</td><td className="p-3">{ev?.status==='submitted'?`${ev.decision||'Submitted'} · ${ev.total}/100`:'Pending'}</td><td className="p-3"><div className="flex gap-2"><select className="input !w-36 !py-1" aria-label="Reassign to judge" defaultValue="" onChange={(e)=>{if(e.target.value)void run('reassign',a.paper,a,e.target.value)}}><option value="">Reassign…</option>{judges.filter((j:any)=>j.user_id!==a.judge_id).map((j:any)=><option key={j.user_id} value={j.user_id}>{j.profiles?.full_name||j.profiles?.email}</option>)}</select><button className="rounded-lg border border-red-200 px-2 text-red-700" onClick={()=>void run('remove',a.paper,a,'')}>Remove</button></div></td></tr>})}</tbody></table></div>}
+      <div className="flex items-center justify-between border-t p-3 text-xs"><span>{filteredAssignments.length} rows · page {safePage} of {pageCount}</span><div className="flex gap-2"><button className="btn-outline !px-3 !py-1" disabled={safePage<=1} onClick={()=>setPage(safePage-1)}>Previous</button><button className="btn-outline !px-3 !py-1" disabled={safePage>=pageCount} onClick={()=>setPage(safePage+1)}>Next</button></div></div>
+    </section>
+  </div>
+}
+function Count({label,value}:{label:string;value:number}) { return <div><p className="text-lg font-bold text-royal-900">{value}</p><p className="text-[10px] text-slate-500">{label}</p></div> }
 
 function EvaluationApprovalTab({ showMsg }: { showMsg: (m: string, t?: any) => void }) {
   const [rows, setRows] = useState<any[]>([])
@@ -627,7 +691,7 @@ function SubmissionsReviewTab({ showMsg }: { showMsg: (m: string, t?: any) => vo
   const load = useCallback(async () => {
     const { data } = await supabase
       .from('submissions')
-      .select('*, profiles(full_name, email), registrations(abstract, research_categories(name), participants(*)), originality_reports(*), evaluations(*), judge_assignments(judge_id)')
+      .select('*, profiles(full_name, email), registrations(abstract, research_categories(name), participants(*)), originality_reports(*), evaluations(*), judge_assignments(id,judge_id,status,created_at)')
       .eq('locked', true)
       .order('submitted_at', { ascending: false })
 
@@ -694,7 +758,8 @@ function SubmissionsReviewTab({ showMsg }: { showMsg: (m: string, t?: any) => vo
 
   const handleAssignJudge = async (subId: string, judgeId: string) => {
     if (!judgeId) return
-    const { error } = await supabase.rpc('assign_judge', { p_submission: subId, p_judge: judgeId })
+    if (!confirm('Are you sure you want to assign this research paper to the selected Judge?')) return
+    const { error } = await supabase.rpc('admin_manage_judge_assignment', { p_action: 'assign', p_submission: subId, p_judge: judgeId, p_assignment: null, p_new_judge: null })
     if (error) {
       showMsg(error.message, 'error')
     } else {
@@ -779,7 +844,7 @@ function SubmissionsReviewTab({ showMsg }: { showMsg: (m: string, t?: any) => vo
                 {/* Juror & Evaluation Status */}
                 <div className="flex flex-wrap items-center gap-2 text-xs pt-1">
                   <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                    {(s.judge_assignments ?? []).length} Juror(s) Assigned
+                  {(s.judge_assignments ?? []).filter((a: any) => a.status === 'active').length} Judge(s) Assigned
                   </span>
                   {avgScore && (
                     <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold">
