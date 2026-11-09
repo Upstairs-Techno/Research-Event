@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fmtDate, rupees } from '../lib/utils'
 import ReportPanel from '../components/ReportPanel'
@@ -36,7 +36,8 @@ import {
   KeyRound,
   Power,
   Trash2,
-  EyeOff
+  EyeOff,
+  Menu
 } from 'lucide-react'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -70,7 +71,40 @@ function downloadCsv(name: string, csv: string) {
 
 export default function AdminDashboard() {
   const [tab, setTab] = useState<Tab>('overview')
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [isMobileLayout, setIsMobileLayout] = useState(() => window.matchMedia('(max-width: 1023px)').matches)
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null)
+  const adminNavRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 1023px)')
+    const updateLayout = () => setIsMobileLayout(query.matches)
+    query.addEventListener('change', updateLayout)
+    return () => query.removeEventListener('change', updateLayout)
+  }, [])
+
+  useEffect(() => {
+    if (adminNavRef.current) adminNavRef.current.inert = isMobileLayout && !mobileNavOpen
+  }, [isMobileLayout, mobileNavOpen])
+
+  useEffect(() => {
+    if (!mobileNavOpen) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileNavOpen(false)
+    }
+    const closeOnDesktop = () => {
+      if (window.matchMedia('(min-width: 1024px)').matches) setMobileNavOpen(false)
+    }
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', closeOnEscape)
+    window.addEventListener('resize', closeOnDesktop)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', closeOnEscape)
+      window.removeEventListener('resize', closeOnDesktop)
+    }
+  }, [mobileNavOpen])
 
   const showMsg = useCallback((text: string, type: 'success' | 'error' | 'info' = 'success') => {
     setMsg({ text, type })
@@ -94,6 +128,9 @@ export default function AdminDashboard() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button type="button" aria-label="Open admin navigation" aria-controls="admin-sections" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen(true)} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-royal-900 shadow-sm hover:bg-royal-50 lg:hidden">
+            <Menu className="h-5 w-5" />
+          </button>
           <span className="text-xs text-slate-500 hidden md:inline">
             Authorized Editorial &amp; Review Access
           </span>
@@ -122,8 +159,9 @@ export default function AdminDashboard() {
 
       {/* Main Layout: Sidebar Navigation + Content Workspace */}
       <div className="mt-6 grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+        {mobileNavOpen && <button type="button" aria-label="Close admin navigation" onClick={() => setMobileNavOpen(false)} className="fixed inset-0 z-[60] bg-slate-950/50 backdrop-blur-[1px] transition-opacity lg:hidden" />}
         {/* Sidebar Nav */}
-        <nav aria-label="Admin Sections" className="space-y-1 lg:sticky lg:top-20 lg:h-fit">
+        <nav ref={adminNavRef} id="admin-sections" aria-label="Admin Sections" aria-hidden={isMobileLayout && !mobileNavOpen} className={`fixed inset-y-0 left-0 z-[70] w-[min(18rem,86vw)] overflow-y-auto bg-slate-50 p-4 shadow-2xl transition-transform duration-300 ease-out lg:sticky lg:top-20 lg:z-auto lg:h-fit lg:w-auto lg:overflow-visible lg:bg-transparent lg:p-0 lg:shadow-none lg:transition-none ${mobileNavOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
           <div className="rounded-2xl bg-white p-2.5 shadow-sm border border-slate-200 space-y-1">
             {TABS.map(({ id, label, icon: Icon }) => (
               <button
@@ -131,6 +169,7 @@ export default function AdminDashboard() {
                 onClick={() => {
                   setTab(id)
                   setMsg(null)
+                  setMobileNavOpen(false)
                 }}
                 className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${
                   tab === id
@@ -1415,6 +1454,17 @@ function SettingsTab({ showMsg }: { showMsg: (m: string, t?: any) => void }) {
   const [rubric, setRubric] = useState('')
   const [cats, setCats] = useState<any[]>([])
   const [newCat, setNewCat] = useState('')
+  const [newCatDescription, setNewCatDescription] = useState('')
+  const [editingCategory, setEditingCategory] = useState<string | null>(null)
+  const [categoryName, setCategoryName] = useState('')
+  const [categoryDescription, setCategoryDescription] = useState('')
+  const [categoryBusy, setCategoryBusy] = useState<string | null>(null)
+
+  const loadCategories = useCallback(async () => {
+    const { data, error } = await supabase.from('research_categories').select('*').order('name')
+    if (error) showMsg(`Could not load research categories: ${error.message}`, 'error')
+    else setCats(data ?? [])
+  }, [showMsg])
 
   useEffect(() => {
     supabase
@@ -1426,8 +1476,8 @@ function SettingsTab({ showMsg }: { showMsg: (m: string, t?: any) => void }) {
         setS(data)
         setRubric(JSON.stringify(data?.rubric ?? [], null, 2))
       })
-    supabase.from('research_categories').select('*').then(({ data }) => setCats(data ?? []))
-  }, [])
+    void loadCategories()
+  }, [loadCategories])
 
   if (!s) return <p className="text-xs text-slate-500 p-6">Loading configuration…</p>
 
@@ -1469,15 +1519,79 @@ function SettingsTab({ showMsg }: { showMsg: (m: string, t?: any) => void }) {
   }
 
   const addCat = async () => {
-    const slug = newCat.toLowerCase().replace(/[^a-z0-9]+/g, '-')
-    const { error } = await supabase.from('research_categories').insert({ name: newCat, slug })
+    const name = newCat.trim()
+    if (!name) { showMsg('Enter a category name.', 'error'); return }
+    if (name.length > 100) { showMsg('Category names must be 100 characters or fewer.', 'error'); return }
+    const slug = name.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    if (!slug) { showMsg('Choose a category name containing letters or numbers.', 'error'); return }
+    setCategoryBusy('new')
+    const { error } = await supabase.from('research_categories').insert({ name, description: newCatDescription.trim(), slug, active: true })
+    setCategoryBusy(null)
     if (error) {
-      showMsg(error.message, 'error')
+      showMsg(error.code === '23505' ? 'A category with that name or URL key already exists.' : error.message, 'error')
     } else {
-      showMsg(`Category "${newCat}" created.`)
+      showMsg(`Category "${name}" created.`)
       setNewCat('')
-      supabase.from('research_categories').select('*').then(({ data }) => setCats(data ?? []))
+      setNewCatDescription('')
+      await loadCategories()
     }
+  }
+
+  const startCategoryEdit = (category: any) => {
+    setEditingCategory(category.id)
+    setCategoryName(category.name)
+    setCategoryDescription(category.description ?? '')
+  }
+
+  const saveCategory = async (category: any) => {
+    const name = categoryName.trim()
+    if (!name) { showMsg('Category name cannot be blank.', 'error'); return }
+    if (name.length > 100) { showMsg('Category names must be 100 characters or fewer.', 'error'); return }
+    const slug = name.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    if (!slug) { showMsg('Choose a category name containing letters or numbers.', 'error'); return }
+    setCategoryBusy(category.id)
+    const { error } = await supabase.from('research_categories').update({ name, description: categoryDescription.trim(), slug }).eq('id', category.id)
+    setCategoryBusy(null)
+    if (error) {
+      showMsg(error.code === '23505' ? 'A category with that name or URL key already exists.' : error.message, 'error')
+      return
+    }
+    setEditingCategory(null)
+    showMsg(`Category "${name}" updated.`)
+    await loadCategories()
+  }
+
+  const toggleCategory = async (category: any) => {
+    setCategoryBusy(category.id)
+    const { error } = await supabase.from('research_categories').update({ active: !category.active }).eq('id', category.id)
+    setCategoryBusy(null)
+    if (error) { showMsg(`Could not ${category.active ? 'deactivate' : 'activate'} category: ${error.message}`, 'error'); return }
+    showMsg(`Category "${category.name}" ${category.active ? 'deactivated' : 'activated'}.`)
+    await loadCategories()
+  }
+
+  const deleteCategory = async (category: any) => {
+    if (!window.confirm(`Delete the research category "${category.name}"? This cannot be undone.`)) return
+    setCategoryBusy(category.id)
+    const { count, error: usageError } = await supabase.from('registrations').select('id', { count: 'exact', head: true }).eq('category_id', category.id)
+    if (usageError) {
+      setCategoryBusy(null)
+      showMsg(`Could not check whether this category is in use: ${usageError.message}`, 'error')
+      return
+    }
+    if ((count ?? 0) > 0) {
+      setCategoryBusy(null)
+      showMsg(`"${category.name}" is linked to ${count} existing registration${count === 1 ? '' : 's'} and cannot be deleted. Deactivate it to preserve historical records.`, 'error')
+      return
+    }
+    const { error } = await supabase.from('research_categories').delete().eq('id', category.id)
+    setCategoryBusy(null)
+    if (error) {
+      showMsg(error.code === '23503' ? `"${category.name}" is already linked to a submission or registration. Deactivate it to preserve historical records.` : `Could not delete category: ${error.message}`, 'error')
+      return
+    }
+    showMsg(`Category "${category.name}" deleted.`)
+    await loadCategories()
   }
 
   return (
@@ -1565,26 +1679,28 @@ function SettingsTab({ showMsg }: { showMsg: (m: string, t?: any) => void }) {
       </div>
 
       {/* Categories */}
-      <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200 space-y-3">
-        <h3 className="font-serif text-base font-bold text-royal-950">Active Research Categories</h3>
-        <div className="flex flex-wrap gap-2 text-xs">
-          {cats.map((c) => (
-            <span key={c.id} className="px-3 py-1 rounded-full bg-slate-100 text-slate-800 font-medium">
-              {c.name}
-            </span>
-          ))}
+      <div className="rounded-2xl bg-white p-5 sm:p-6 shadow-sm border border-slate-200 space-y-4">
+        <div><h3 className="font-serif text-base font-bold text-royal-950">Research Categories</h3><p className="mt-1 text-xs text-slate-500">Manage the categories available during registration. Deactivated categories remain visible here and preserve existing records.</p></div>
+        <div className="space-y-3">
+          {cats.length === 0 && <p className="rounded-xl border border-dashed border-slate-300 p-4 text-xs text-slate-500">No research categories yet. Add one below.</p>}
+          {cats.map((c) => <article key={c.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+            {editingCategory === c.id ? <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="space-y-1 text-[11px] font-bold uppercase tracking-wider text-slate-600">Category name<input maxLength={100} className="input mt-1 bg-white normal-case tracking-normal font-normal" value={categoryName} onChange={(e) => setCategoryName(e.target.value)} /></label>
+                <label className="space-y-1 text-[11px] font-bold uppercase tracking-wider text-slate-600">Details<textarea rows={2} className="input mt-1 bg-white normal-case tracking-normal font-normal" value={categoryDescription} onChange={(e) => setCategoryDescription(e.target.value)} /></label>
+              </div>
+              <div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={() => setEditingCategory(null)} className="btn-outline !py-2 !text-xs"><X className="h-3.5 w-3.5"/>Cancel</button><button type="button" disabled={categoryBusy === c.id} onClick={() => saveCategory(c)} className="btn-primary !py-2 !text-xs">{categoryBusy === c.id ? 'Saving…' : 'Save changes'}</button></div>
+            </div> : <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h4 className="font-semibold text-sm text-royal-950">{c.name}</h4><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${c.active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}`}>{c.active ? 'Active' : 'Inactive'}</span></div><p className="mt-1 whitespace-pre-line break-words text-xs text-slate-600">{c.description || 'No additional details.'}</p></div>
+              <div className="flex shrink-0 flex-wrap gap-1 self-end sm:self-auto"><button type="button" title="Edit category" aria-label={`Edit ${c.name}`} onClick={() => startCategoryEdit(c)} className="rounded-lg p-2 text-slate-600 hover:bg-white hover:text-royal-800"><Pencil className="h-4 w-4" /></button><button type="button" title={c.active ? 'Deactivate category' : 'Activate category'} aria-label={`${c.active ? 'Deactivate' : 'Activate'} ${c.name}`} disabled={categoryBusy === c.id} onClick={() => toggleCategory(c)} className="rounded-lg p-2 text-slate-600 hover:bg-white disabled:opacity-40"><Power className="h-4 w-4" /></button><button type="button" title="Delete category" aria-label={`Delete ${c.name}`} disabled={categoryBusy === c.id} onClick={() => deleteCategory(c)} className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-40"><Trash2 className="h-4 w-4" /></button></div>
+            </div>}
+          </article>)}
         </div>
-        <div className="flex gap-2 max-w-md pt-2">
-          <input
-            className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs focus:outline-none"
-            placeholder="New Category Name"
-            value={newCat}
-            onChange={(e) => setNewCat(e.target.value)}
-          />
-          <button onClick={addCat} disabled={!newCat.trim()} className="btn-outline !py-2 !text-xs">
-            Add
-          </button>
-        </div>
+        <form className="grid max-w-3xl gap-3 border-t border-slate-100 pt-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_auto] sm:items-end" onSubmit={(event) => { event.preventDefault(); void addCat() }}>
+          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600">New category<input maxLength={100} className="input mt-1" placeholder="Category name" value={newCat} onChange={(e) => setNewCat(e.target.value)} /></label>
+          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600">Details<textarea rows={1} className="input mt-1" placeholder="Optional description" value={newCatDescription} onChange={(e) => setNewCatDescription(e.target.value)} /></label>
+          <button type="submit" disabled={!newCat.trim() || categoryBusy === 'new'} className="btn-outline !py-2.5 !text-xs">{categoryBusy === 'new' ? 'Adding…' : 'Add category'}</button>
+        </form>
       </div>
     </div>
   )
