@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react'
+import { FormEvent, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Check, Eye, EyeOff, GraduationCap, ShieldCheck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -26,8 +26,8 @@ function validate(f: Fields): Errors {
 }
 
 function friendlyAuthError(error: { message: string; code?: string; status?: number }) {
+  if (error.status === 429 || /too many|rate limit|email rate/i.test(error.message)) return 'Too many registration attempts. Please wait a few minutes before trying again.'
   if (error.code === 'user_already_exists' || /already registered|user already registered/i.test(error.message)) return 'An account with this email already exists. Please log in instead.'
-  if (/rate limit|email rate/i.test(error.message)) return 'Too many attempts. Please wait a few minutes and try again.'
   if (/network|fetch/i.test(error.message)) return 'We could not reach the registration service. Check your connection and try again.'
   if (error.code === 'weak_password' || /password.*(weak|short)|password should be/i.test(error.message)) return 'Choose a stronger password that meets all the requirements below.'
   if (error.code === 'email_address_invalid' || /invalid email/i.test(error.message)) return 'Enter a valid email address.'
@@ -44,6 +44,7 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [busy, setBusy] = useState(false)
+  const submitting = useRef(false)
   const [notice, setNotice] = useState('')
   const [noticeSuccess, setNoticeSuccess] = useState(false)
 
@@ -56,10 +57,12 @@ export default function Register() {
   }
   const submit = async (event: FormEvent) => {
     event.preventDefault()
+    if (submitting.current) return
     setSubmitted(true)
     const found = validate(fields)
     setErrors(found)
     if (Object.keys(found).length) return
+    submitting.current = true
     setBusy(true); setNotice(''); setNoticeSuccess(false)
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -91,7 +94,7 @@ export default function Register() {
       nav('/complete-registration', { replace: true })
     } catch (err) {
       setNotice(friendlyAuthError(err as { message: string; code?: string; status?: number }))
-    } finally { setBusy(false) }
+    } finally { submitting.current = false; setBusy(false) }
   }
   const fieldError = (key: keyof Fields) => submitted || touched[key] ? errors[key] : undefined
   const blur = (key: keyof Fields) => { setTouched((v) => ({ ...v, [key]: true })); setErrors(validate(fields)) }
