@@ -25,10 +25,13 @@ function validate(f: Fields): Errors {
   return e
 }
 
-function friendlyAuthError(message: string) {
-  if (/already registered|already exists|user already/i.test(message)) return 'An account may already exist for this email. Try logging in.'
-  if (/rate limit|email rate/i.test(message)) return 'Too many attempts. Please wait a few minutes and try again.'
-  if (/network|fetch/i.test(message)) return 'We could not reach the registration service. Check your connection and try again.'
+function friendlyAuthError(error: { message: string; code?: string; status?: number }) {
+  if (error.code === 'user_already_exists' || /already registered|user already registered/i.test(error.message)) return 'An account with this email already exists. Please log in instead.'
+  if (/rate limit|email rate/i.test(error.message)) return 'Too many attempts. Please wait a few minutes and try again.'
+  if (/network|fetch/i.test(error.message)) return 'We could not reach the registration service. Check your connection and try again.'
+  if (error.code === 'weak_password' || /password.*(weak|short)|password should be/i.test(error.message)) return 'Choose a stronger password that meets all the requirements below.'
+  if (error.code === 'email_address_invalid' || /invalid email/i.test(error.message)) return 'Enter a valid email address.'
+  if (error.status && error.status >= 500) return 'The registration service is temporarily unavailable. Please try again shortly.'
   return 'We could not create your account right now. Please try again.'
 }
 
@@ -42,12 +45,14 @@ export default function Register() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
+  const [noticeSuccess, setNoticeSuccess] = useState(false)
 
   const update = (key: keyof Fields, value: string) => {
     const next = { ...fields, [key]: value }
     setFields(next)
     if (submitted || touched[key]) setErrors(validate(next))
     setNotice('')
+    setNoticeSuccess(false)
   }
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -55,20 +60,37 @@ export default function Register() {
     const found = validate(fields)
     setErrors(found)
     if (Object.keys(found).length) return
-    setBusy(true); setNotice('')
+    setBusy(true); setNotice(''); setNoticeSuccess(false)
     try {
       const { data, error } = await supabase.auth.signUp({
         email: fields.email.trim().toLowerCase(), password: fields.password,
-        options: { data: { full_name: fields.name.trim(), mobile: fields.mobile.trim() } },
+        options: {
+          data: { full_name: fields.name.trim(), mobile: fields.mobile.trim() },
+          emailRedirectTo: `${window.location.origin}/login`,
+        },
       })
-      if (error) throw error
+      if (error) {
+        setNotice(friendlyAuthError(error))
+        return
+      }
+      if (!data.user) {
+        setNotice('We could not confirm that your account was created. Please try again.')
+        return
+      }
+      // Supabase may hide an existing account by returning a user with no identities.
+      // A missing session by itself is not evidence that the email is already registered.
+      if (data.user.identities?.length === 0) {
+        setNotice('An account with this email already exists. Please log in instead.')
+        return
+      }
       if (!data.session) {
-        setNotice('Your account was created, but automatic sign-in did not complete. Please log in to continue or contact support.')
+        setNoticeSuccess(true)
+        setNotice('Account created successfully. Please check your email to verify your account before logging in.')
         return
       }
       nav('/complete-registration', { replace: true })
     } catch (err) {
-      setNotice(friendlyAuthError((err as Error).message))
+      setNotice(friendlyAuthError(err as { message: string; code?: string; status?: number }))
     } finally { setBusy(false) }
   }
   const fieldError = (key: keyof Fields) => submitted || touched[key] ? errors[key] : undefined
@@ -97,7 +119,7 @@ export default function Register() {
         <div><label htmlFor="password" className="text-sm font-semibold text-stone-800">Password</label><div className="relative mt-1"><input id="password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" className={`${inputClass('password')} pr-12`} placeholder="Create a strong password" value={fields.password} onChange={(e) => update('password', e.target.value)} aria-invalid={!!fieldError('password')} aria-describedby="password-rules" /><button type="button" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? 'Hide password' : 'Show password'} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-stone-500 hover:text-stone-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600">{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div>{fieldError('password') && <p className="mt-1 text-xs text-red-700">{fieldError('password')}</p>}<ul id="password-rules" className="mt-2 grid grid-cols-2 gap-1 text-[11px] sm:grid-cols-1">{passwordRules.map((r) => <li key={r.label} className={r.test(fields.password) ? 'text-emerald-700' : 'text-stone-500'}>{r.test(fields.password) ? '✓' : '○'} {r.label}</li>)}</ul></div>
         <div><label htmlFor="confirmPassword" className="text-sm font-semibold text-stone-800">Confirm password</label><div className="relative mt-1"><input id="confirmPassword" type={showConfirm ? 'text' : 'password'} autoComplete="new-password" className={`${inputClass('confirm')} pr-12`} placeholder="Enter your password again" value={fields.confirm} onChange={(e) => update('confirm', e.target.value)} aria-invalid={!!fieldError('confirm')} aria-describedby={fieldError('confirm') ? 'confirm-error' : undefined} /><button type="button" onClick={() => setShowConfirm((v) => !v)} aria-label={showConfirm ? 'Hide confirm password' : 'Show confirm password'} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-stone-500 hover:text-stone-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600">{showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}</button></div>{fieldError('confirm') && <p id="confirm-error" className="mt-1 text-xs text-red-700">{fieldError('confirm')}</p>}</div>
       </div>
-      {notice && <p role="alert" className="mt-5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800">{notice}</p>}
+      {notice && <p role={noticeSuccess ? 'status' : 'alert'} className={`mt-5 rounded-lg border px-3 py-2.5 text-sm ${noticeSuccess ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-800'}`}>{notice}</p>}
       <button className="btn-primary mt-7 w-full py-3" disabled={busy}>{busy ? 'Creating secure account…' : 'Create account'}</button>
       <p className="mt-4 text-center text-sm text-stone-600">Already registered? <Link to="/login" className="font-semibold text-orange-700 underline">Log in</Link></p>
       <p className="mt-4 text-center text-xs leading-5 text-stone-500">Your password is sent securely to Supabase Auth and is never stored or logged by this form.</p>
