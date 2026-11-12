@@ -33,7 +33,7 @@ export default function Home() {
         </div>
         <div className="hero-art" aria-label="Research Distinction Awards emblem">
           <div className="orbit orbit-one"/><div className="orbit orbit-two"/>
-          <div className="art-center"><img src="/Research%20distinction%20event.jpeg" alt="Research Distinction Awards event artwork" /></div>
+          <div className="art-center"><img src="/Research%20Distinction%20Awards%20New%20Poster.png" alt="Research Distinction Awards 2026 poster" /></div>
           <div className="art-caption">THE PURSUIT<br/>OF KNOWLEDGE</div>
         </div>
         <div className="hero-index">01 <span>—</span> RESEARCH · RECOGNITION · IMPACT</div>
