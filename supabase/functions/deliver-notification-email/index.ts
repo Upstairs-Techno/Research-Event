@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
   if (mailError) return json({ error: mailError.message }, 500)
   const details = (notification as any).details ?? {}
   const confirmationHtml = notification.kind === 'registration_confirmation' ? `
-    <h1>Registration confirmed</h1>
+    <h1>Payment Successful</h1>
     <p>Dear ${escapeHtml(details.participant_name ?? profile.full_name ?? 'Participant')},</p>
     <p>Your payment has been verified and your registration for ${escapeHtml(details.competition_name ?? 'Research Distinction Awards')} is confirmed.</p>
     <table cellpadding="8" cellspacing="0" style="border-collapse:collapse">
@@ -45,9 +45,11 @@ Deno.serve(async (req) => {
       <tr><td><strong>Registration ID</strong></td><td>${escapeHtml(details.registration_id ?? '')}</td></tr>
       <tr><td><strong>Participant ID</strong></td><td>${escapeHtml(details.participant_code ?? '')}</td></tr>
       <tr><td><strong>Competition</strong></td><td>${escapeHtml(details.competition_name ?? 'Research Distinction Awards')}</td></tr>
+      <tr><td><strong>Project title</strong></td><td>${escapeHtml(details.project_title ?? 'Unavailable')}</td></tr>
       <tr><td><strong>Payment amount</strong></td><td>${escapeHtml(details.currency ?? 'INR')} ${((Number(details.amount_paise) || 0) / 100).toFixed(2)}</td></tr>
       <tr><td><strong>Payment reference</strong></td><td>${escapeHtml(details.payment_reference ?? 'Unavailable')}</td></tr>
       <tr><td><strong>Status</strong></td><td>${escapeHtml(details.confirmation_status ?? 'CONFIRMED')}</td></tr>
+      <tr><td><strong>Payment date</strong></td><td>${escapeHtml(details.paid_at ? new Date(details.paid_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : 'Unavailable')}</td></tr>
     </table>
     <h2>Next steps</h2>
     <p>Sign in to your participant dashboard to review your registration details, competition announcements, research submission instructions, and important deadlines. Keep your registration and payment references for your records.</p>

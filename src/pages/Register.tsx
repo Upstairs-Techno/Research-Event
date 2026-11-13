@@ -46,14 +46,12 @@ export default function Register() {
   const [busy, setBusy] = useState(false)
   const submitting = useRef(false)
   const [notice, setNotice] = useState('')
-  const [noticeSuccess, setNoticeSuccess] = useState(false)
 
   const update = (key: keyof Fields, value: string) => {
     const next = { ...fields, [key]: value }
     setFields(next)
     if (submitted || touched[key]) setErrors(validate(next))
     setNotice('')
-    setNoticeSuccess(false)
   }
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -63,13 +61,12 @@ export default function Register() {
     setErrors(found)
     if (Object.keys(found).length) return
     submitting.current = true
-    setBusy(true); setNotice(''); setNoticeSuccess(false)
+    setBusy(true); setNotice('')
     try {
       const { data, error } = await supabase.auth.signUp({
         email: fields.email.trim().toLowerCase(), password: fields.password,
         options: {
           data: { full_name: fields.name.trim(), mobile: fields.mobile.trim() },
-          emailRedirectTo: `${window.location.origin}/login`,
         },
       })
       if (error) {
@@ -87,8 +84,7 @@ export default function Register() {
         return
       }
       if (!data.session) {
-        setNoticeSuccess(true)
-        setNotice('Account created successfully. Please check your email to verify your account before logging in.')
+        setNotice('Your account was created, but Supabase did not start a signed-in session. Email confirmations must be disabled in Supabase Auth before participants can continue.')
         return
       }
       nav('/complete-registration', { replace: true })
@@ -122,7 +118,7 @@ export default function Register() {
         <div><label htmlFor="password" className="text-sm font-semibold text-stone-800">Password</label><div className="relative mt-1"><input id="password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" className={`${inputClass('password')} pr-12`} placeholder="Create a strong password" value={fields.password} onChange={(e) => update('password', e.target.value)} aria-invalid={!!fieldError('password')} aria-describedby="password-rules" /><button type="button" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? 'Hide password' : 'Show password'} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-stone-500 hover:text-stone-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600">{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div>{fieldError('password') && <p className="mt-1 text-xs text-red-700">{fieldError('password')}</p>}<ul id="password-rules" className="mt-2 grid grid-cols-2 gap-1 text-[11px] sm:grid-cols-1">{passwordRules.map((r) => <li key={r.label} className={r.test(fields.password) ? 'text-emerald-700' : 'text-stone-500'}>{r.test(fields.password) ? '✓' : '○'} {r.label}</li>)}</ul></div>
         <div><label htmlFor="confirmPassword" className="text-sm font-semibold text-stone-800">Confirm password</label><div className="relative mt-1"><input id="confirmPassword" type={showConfirm ? 'text' : 'password'} autoComplete="new-password" className={`${inputClass('confirm')} pr-12`} placeholder="Enter your password again" value={fields.confirm} onChange={(e) => update('confirm', e.target.value)} aria-invalid={!!fieldError('confirm')} aria-describedby={fieldError('confirm') ? 'confirm-error' : undefined} /><button type="button" onClick={() => setShowConfirm((v) => !v)} aria-label={showConfirm ? 'Hide confirm password' : 'Show confirm password'} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-stone-500 hover:text-stone-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600">{showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}</button></div>{fieldError('confirm') && <p id="confirm-error" className="mt-1 text-xs text-red-700">{fieldError('confirm')}</p>}</div>
       </div>
-      {notice && <p role={noticeSuccess ? 'status' : 'alert'} className={`mt-5 rounded-lg border px-3 py-2.5 text-sm ${noticeSuccess ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-800'}`}>{notice}</p>}
+      {notice && <p role="alert" className="mt-5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800">{notice}</p>}
       <button className="btn-primary mt-7 w-full py-3" disabled={busy}>{busy ? 'Creating secure account…' : 'Create account'}</button>
       <p className="mt-4 text-center text-sm text-stone-600">Already registered? <Link to="/login" className="font-semibold text-orange-700 underline">Log in</Link></p>
       <p className="mt-4 text-center text-xs leading-5 text-stone-500">Your password is sent securely to Supabase Auth and is never stored or logged by this form.</p>

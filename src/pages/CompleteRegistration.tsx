@@ -47,7 +47,7 @@ export default function CompleteRegistration() {
         </li>)}
       </ol>
       <form onSubmit={submit} className="mx-auto max-w-2xl rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_18px_60px_-35px_rgba(49,36,26,.35)] sm:p-8">
-        <h1 className="font-serif text-2xl font-bold text-royal-900">Your competition details</h1>
+        <h1 className="font-serif text-2xl font-bold text-royal-900">Your details</h1>
         <p className="mt-1 text-sm text-stone-600">Step 2 of 3 · Tell us where you study and about your research.</p>
         <p className="mt-3 rounded-lg bg-orange-50 px-3 py-2 text-xs text-stone-600">Signed in as <strong className="text-stone-800">{fullName} ({user?.email})</strong></p>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -65,7 +65,7 @@ export default function CompleteRegistration() {
             <option value="">Select…</option>
             {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select></div>
-        <div><label className="label" htmlFor="t">Research title</label>
+        <div><label className="label" htmlFor="t">Project title</label>
           <input id="t" required minLength={5} maxLength={300} className="input" value={f.research_title} onChange={(e) => set('research_title', e.target.value)} /></div>
         <div><label className="label" htmlFor="a">Research abstract (50–4000 characters)</label>
           <textarea id="a" required minLength={50} maxLength={4000} rows={6} className="input" value={f.abstract} onChange={(e) => set('abstract', e.target.value)} /></div>
