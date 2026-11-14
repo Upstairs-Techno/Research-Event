@@ -689,17 +689,59 @@ function SubmissionsReviewTab({ showMsg }: { showMsg: (m: string, t?: any) => vo
   const [savingReview, setSavingReview] = useState(false)
 
   const load = useCallback(async () => {
-    const { data } = await supabase
-      .from('submissions')
-      .select('*, profiles(full_name, email), registrations(abstract, research_categories(name), participants(*)), originality_reports(*), evaluations(*), judge_assignments(id,judge_id,status,created_at)')
-      .eq('locked', true)
-      .order('submitted_at', { ascending: false })
+    const submissionsSelect = '*, profiles(full_name, email), registrations(abstract, research_categories(name), participants(*)), originality_reports(*), evaluations(*), judge_assignments(id,judge_id,status,created_at)'
+    const submissionsQueryParams = new URLSearchParams({
+      select: submissionsSelect,
+      locked: 'eq.true',
+      order: 'submitted_at.desc',
+    })
+    const submissionsRequestUrl = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/submissions?${submissionsQueryParams.toString()}`
 
-    setRows(data ?? [])
+    console.info('SUBMISSIONS LOAD QUERY', {
+      table: 'submissions',
+      select: submissionsSelect,
+      filters: { locked: { operator: 'eq', value: true } },
+      order: [{ column: 'submitted_at', ascending: false }],
+      requestUrl: submissionsRequestUrl,
+    })
 
-    const { data: j } = await supabase.from('judges').select('user_id, profiles(full_name, email)')
-    setJudges(j ?? [])
-  }, [])
+    const [submissionsResult, judgesResult] = await Promise.all([
+      supabase
+        .from('submissions')
+        .select(submissionsSelect)
+        .eq('locked', true)
+        .order('submitted_at', { ascending: false }),
+      supabase.from('judges').select('user_id, profiles(full_name, email)'),
+    ])
+
+    const loadError = submissionsResult.error || judgesResult.error
+    if (loadError) {
+      const source = submissionsResult.error ? 'submissions' : 'judges'
+      if (submissionsResult.error) {
+        console.error('SUBMISSIONS LOAD ERROR', {
+          status: submissionsResult.status,
+          message: submissionsResult.error?.message,
+          details: submissionsResult.error?.details,
+          hint: submissionsResult.error?.hint,
+          code: submissionsResult.error?.code,
+          requestUrl: submissionsRequestUrl,
+          queryParameters: {
+            select: submissionsSelect,
+            filters: { locked: { operator: 'eq', value: true } },
+            order: [{ column: 'submitted_at', ascending: false }],
+          },
+        })
+      }
+      const details = [loadError.message, loadError.details, loadError.hint, loadError.code]
+        .filter(Boolean)
+        .join(' · ')
+      showMsg(`Could not load ${source}: ${details}`, 'error')
+      return
+    }
+
+    setRows(submissionsResult.data ?? [])
+    setJudges(judgesResult.data ?? [])
+  }, [showMsg])
 
   useEffect(() => {
     load()
@@ -758,6 +800,11 @@ function SubmissionsReviewTab({ showMsg }: { showMsg: (m: string, t?: any) => vo
 
   const handleAssignJudge = async (subId: string, judgeId: string) => {
     if (!judgeId) return
+    const submission = rows.find((row) => row.id === subId)
+    if (!submission || submission.review_decision !== 'approved') {
+      showMsg('Approve the submission before assigning a judge.', 'error')
+      return
+    }
     if (!confirm('Are you sure you want to assign this research paper to the selected Judge?')) return
     const { error } = await supabase.rpc('admin_manage_judge_assignment', { p_action: 'assign', p_submission: subId, p_judge: judgeId, p_assignment: null, p_new_judge: null })
     if (error) {
@@ -884,6 +931,8 @@ function SubmissionsReviewTab({ showMsg }: { showMsg: (m: string, t?: any) => vo
                       className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs bg-white focus:outline-none"
                       value={pickJudge[s.id] || ''}
                       onChange={(e) => setPickJudge({ ...pickJudge, [s.id]: e.target.value })}
+                      disabled={s.review_decision !== 'approved'}
+                      title={s.review_decision !== 'approved' ? 'Approve this submission before assigning a judge.' : undefined}
                     >
                       <option value="">Assign Juror…</option>
                       {judges.map((j) => (
@@ -893,7 +942,7 @@ function SubmissionsReviewTab({ showMsg }: { showMsg: (m: string, t?: any) => vo
                       ))}
                     </select>
                     <button
-                      disabled={!pickJudge[s.id]}
+                      disabled={!pickJudge[s.id] || s.review_decision !== 'approved'}
                       onClick={() => handleAssignJudge(s.id, pickJudge[s.id])}
                       className="btn-outline !py-1.5 !px-3 !text-xs disabled:opacity-40"
                     >
