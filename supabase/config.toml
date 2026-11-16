@@ -1,8 +1,8 @@
 project_id = "research-awards-portal"
 
 [auth]
-site_url = "http://localhost:5173"
-additional_redirect_urls = ["http://localhost:5173"]
+site_url = "https://research-distinction.upstairstechno.com"
+additional_redirect_urls = ["https://research-distinction.upstairstechno.com/reset-password", "http://localhost:5173", "http://127.0.0.1:5173"]
 
 [auth.email]
 enable_signup = true

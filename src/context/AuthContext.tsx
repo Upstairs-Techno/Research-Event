@@ -8,6 +8,7 @@ interface Ctx {
   user: User | null
   role: Role | null
   accountActive: boolean | null
+  recoverySession: boolean
   fullName: string
   loading: boolean
   roleLoading: boolean
@@ -15,13 +16,14 @@ interface Ctx {
 }
 
 const AuthContext = createContext<Ctx>({
-  session: null, user: null, role: null, accountActive: null, fullName: '', loading: true, roleLoading: true, signOut: async () => {},
+  session: null, user: null, role: null, accountActive: null, recoverySession: false, fullName: '', loading: true, roleLoading: true, signOut: async () => {},
 })
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [role, setRole] = useState<Role | null>(null)
   const [accountActive, setAccountActive] = useState<boolean | null>(null)
+  const [recoverySession, setRecoverySession] = useState(false)
   const [fullName, setFullName] = useState('')
   const [loading, setLoading] = useState(true)
   const [roleLoading, setRoleLoading] = useState(true)
@@ -29,13 +31,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true
+    const recoveryMarker = 'rda-password-recovery'
     supabase.auth.getSession().then(({ data }) => {
       if (!active) return
       const nextUserId = data.session?.user.id ?? null
       const identityChanged = nextUserId !== sessionUserId.current
       sessionUserId.current = nextUserId
       setSession(data.session)
+      setRecoverySession(Boolean(data.session && window.sessionStorage.getItem(recoveryMarker) === data.session.user.id))
       if (!data.session) {
+        window.sessionStorage.removeItem(recoveryMarker)
         setRole(null); setAccountActive(null); setLoading(false); setRoleLoading(false)
       } else if (identityChanged) {
         setRole(null); setAccountActive(null)
@@ -44,8 +49,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }).catch(() => {
       if (active) { sessionUserId.current = null; setSession(null); setRole(null); setAccountActive(null); setRoleLoading(false); setLoading(false) }
     })
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       setSession(s)
+      if (event === 'PASSWORD_RECOVERY' && s) {
+        window.sessionStorage.setItem(recoveryMarker, s.user.id)
+        setRecoverySession(true)
+      } else if (event === 'SIGNED_OUT' || !s) {
+        window.sessionStorage.removeItem(recoveryMarker)
+        setRecoverySession(false)
+      }
       const nextUserId = s?.user.id ?? null
       if (nextUserId !== sessionUserId.current) {
         sessionUserId.current = nextUserId
@@ -97,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider
       value={{
-        session, user: session?.user ?? null, role, accountActive, fullName,
+        session, user: session?.user ?? null, role, accountActive, recoverySession, fullName,
         loading, roleLoading,
         signOut: async () => { await supabase.auth.signOut() },
       }}
